@@ -463,7 +463,7 @@ day_bridge::bridge! {
             import androidx.credentials.CustomCredential;
             import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
             import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
-            import dev.daybrite.day.bridge.DayBridge;
+            import dev.daybrite.day.bridge.DayRuntime;
             import org.json.JSONObject;
         "#,
         body = r#"
@@ -474,7 +474,7 @@ day_bridge::bridge! {
                 long done = daySessionDone;
                 daySessionDone = 0;
                 if (dayResumeWatch != null) {
-                    Context ctx = DayBridge.ctx;
+                    Context ctx = DayRuntime.ctx;
                     if (ctx instanceof Activity) {
                         ((Activity) ctx).getApplication().unregisterActivityLifecycleCallbacks(dayResumeWatch);
                     }
@@ -487,13 +487,13 @@ day_bridge::bridge! {
 
             public static void open_session_native(final String url, String callbackScheme, String callbackPrefix,
                                                    boolean ephemeral, final long done) {
-                final Context ctx = DayBridge.ctx;
+                final Context ctx = DayRuntime.ctx;
                 if (!(ctx instanceof Activity)) {
                     open_session_native_complete(done, "error:no activity to open the browser from");
                     return;
                 }
                 final Activity activity = (Activity) ctx;
-                DayBridge.main.post(new Runnable() {
+                DayRuntime.main.post(new Runnable() {
                     @Override
                     public void run() {
                         daySessionSettle("cancelled");
@@ -523,7 +523,7 @@ day_bridge::bridge! {
             }
 
             public static void close_session_native() {
-                DayBridge.main.post(new Runnable() {
+                DayRuntime.main.post(new Runnable() {
                     @Override
                     public void run() {
                         daySessionSettle("cancelled");
@@ -562,13 +562,13 @@ day_bridge::bridge! {
             }
 
             public static void create_passkey_native(final String optionsJson, final long done) {
-                final Context ctx = DayBridge.ctx;
+                final Context ctx = DayRuntime.ctx;
                 if (!(ctx instanceof Activity) || Build.VERSION.SDK_INT < 28) {
                     create_passkey_native_complete(done, "unsupported");
                     return;
                 }
                 final Activity activity = (Activity) ctx;
-                DayBridge.main.post(new Runnable() {
+                DayRuntime.main.post(new Runnable() {
                     @Override
                     public void run() {
                         try {
@@ -602,13 +602,13 @@ day_bridge::bridge! {
             public static void google_sign_in_native(final String serverClientId, final String nonce,
                                                      final boolean filterByAuthorized, final boolean autoSelect,
                                                      final long done) {
-                final Context ctx = DayBridge.ctx;
+                final Context ctx = DayRuntime.ctx;
                 if (!(ctx instanceof Activity) || Build.VERSION.SDK_INT < 28) {
                     google_sign_in_native_complete(done, "unsupported");
                     return;
                 }
                 final Activity activity = (Activity) ctx;
-                DayBridge.main.post(new Runnable() {
+                DayRuntime.main.post(new Runnable() {
                     @Override
                     public void run() {
                         try {
@@ -689,13 +689,13 @@ day_bridge::bridge! {
             }
 
             public static void get_passkey_native(final String optionsJson, final long done) {
-                final Context ctx = DayBridge.ctx;
+                final Context ctx = DayRuntime.ctx;
                 if (!(ctx instanceof Activity) || Build.VERSION.SDK_INT < 28) {
                     get_passkey_native_complete(done, "unsupported");
                     return;
                 }
                 final Activity activity = (Activity) ctx;
-                DayBridge.main.post(new Runnable() {
+                DayRuntime.main.post(new Runnable() {
                     @Override
                     public void run() {
                         try {

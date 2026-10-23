@@ -85,7 +85,7 @@ Rust, and the arms hand back a URL or a JSON document and decide nothing.
 | [day-part-http](https://github.com/daybrite/day/tree/main/parts/day-part-http) | The token, discovery, JWKS and userinfo requests, through each platform's HTTP stack. |
 | [serde](https://github.com/serde-rs/serde), [serde_json](https://github.com/serde-rs/json) | The JSON documents the protocol is made of. |
 | [windows](https://github.com/microsoft/windows-rs) (Windows only) | `webauthn.dll` and `BCryptGenRandom`. |
-| [day-android](https://github.com/daybrite/day/tree/main/toolkits/day-android) (Android only) | The cached JVM and application context for the Java arm. |
+| [day-android-runtime](https://github.com/daybrite/day/tree/main/crates/day-android-runtime) (Android only) | The cached JVM and application context for the Java arm. |
 | Gradle (Android, declared by the part) | `androidx.browser`, `androidx.credentials`, `credentials-play-services-auth`, `googleid`. |
 
 The signatures are verified by the crate's own `crypto` module (SHA-256, HMAC, RSA PKCS#1 v1.5,
