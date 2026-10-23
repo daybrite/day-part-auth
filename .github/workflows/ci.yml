@@ -78,6 +78,11 @@ jobs:
       update-day-deps: true
       scripts: dayscript/auth.yaml
       preflight-checks: fmt, clippy, test
+      # This iPhone-only demo does not use the runner's preconfigured Watch pairs. Remove them
+      # before Xcode loads CoreSimulator: the Xcode 27 image can abort in addDevicePairAsync
+      # with "Invalid parameter not satisfying: devicePair" after the simulator boots.
+      target-setup: |
+        ios-uikit: xcrun simctl list pairs --json | jq -r '.pairs | keys[]' | while IFS= read -r pair; do xcrun simctl unpair "$pair"; done
       ios-devices: |
         device=iPhone, orientation=portrait
       android-devices: |
