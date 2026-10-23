@@ -1,0 +1,25 @@
+# The Day project manifest (https://daybrite.dev/docs/reference/cli). `name`/`version` come from
+# Cargo.toml; any [app] property may be overridden per platform, toolkit, or target.
+schema = 1
+
+[app]
+id = "dev.daybrite.authdemo"
+# The deep-link scheme (https://daybrite.dev/docs/how-to/deep-links): on iOS, Android and
+# HarmonyOS the provider sends the person back to `dayauthdemo://auth/callback`, which the
+# part's `Redirect::Auto` derives from this scheme. Desktops use a loopback listener instead.
+scheme = "dayauthdemo"
+title = "Auth Demo"
+build = 1
+targets = ["windows-winui", "macos-appkit", "linux-gtk", "ios-uikit", "android-mdc", "web-dom", "harmony-arkui"]
+
+# The window's geometry in points (https://daybrite.dev/docs/reference/size-classes).
+[window]
+width = 560
+height = 760
+min_width = 360
+min_height = 480
+
+# The demo provider listens on 127.0.0.1 inside the app, over plain HTTP: Android's network
+# security configuration must allow cleartext to that address for the token exchange.
+[android]
+cleartext-domains = ["127.0.0.1"]

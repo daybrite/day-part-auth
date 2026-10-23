@@ -1,0 +1,104 @@
+[package]
+name = "day-part-auth"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Sign-in for Day apps: OAuth 2.0 and OpenID Connect through the system's auth browser, Sign in with Apple, Google, and passkeys"
+repository = "https://github.com/daybrite/day-part-auth"
+license = "MPL-2.0"
+# The day framework crates are not on crates.io yet; neither is this one. Apps depend on it
+# from git, exactly as they depend on day.
+publish = false
+
+# An external Day Part (https://daybrite.dev/docs/reference/parts): a headless capability crate
+# with no UI Piece. Three layers, one crate:
+#   1. the web auth session: the system's own sign-in browser, which returns the callback URL
+#      (ASWebAuthenticationSession, Custom Tabs, a popup on the web, the default browser plus a
+#      loopback listener on the desktops)
+#   2. the OAuth 2.0 / OpenID Connect client: discovery, PKCE, state and nonce, the token
+#      exchange, refresh and revocation, ID-token verification against the provider's keys
+#   3. the native credentials: Sign in with Apple, Google through Credential Manager, and
+#      passkeys that take WebAuthn JSON in and out
+# `src/native.rs` carries every foreign arm (Swift, Java, JavaScript) under one declaration;
+# `build.rs` generates the glue (https://daybrite.dev/contributing/backend-contracts/bridge).
+#
+# Every day dependency names the bare canonical URL: no branch, tag, or rev. Cargo unifies a git
+# dependency only when URL and ref match, so an app on `git = "…/day.git"` and a part pinned to
+# a tag would carry two copies of every day crate; leaving the ref off lets the app's Cargo.lock
+# choose one revision for the whole graph. `demo/Cargo.lock` is not committed either: CI proves
+# the crate against day's newest main, and `compat` below says which day minor that is.
+#
+# Dependency budget. No crypto crate: the SHA-256, HMAC, base64url, RSA and P-256 the client
+# needs are a few hundred lines in `src/crypto.rs`, each checked against published test vectors
+# and against signatures OpenSSL produced. Randomness comes from the OS. HTTP is day-part-http,
+# JSON is serde_json (what the rest of Day uses).
+
+[package.metadata.day]
+# The day minor this release is built and tested against. `day build` notes a mismatch.
+compat = "0.6"
+
+[features]
+default = []
+# A small OpenID Connect provider on loopback: discovery, authorization with a consent page,
+# PKCE, tokens signed with ES256, userinfo, refresh and revocation. What the demo app and the
+# Day Showcase sign in to without an account anywhere, and what the crate's own end-to-end
+# tests run against. Never for production.
+demo-provider = []
+
+[dependencies]
+# `Support`, `Error`, and the callback tier the foreign arms answer through.
+day-bridge = { git = "https://github.com/daybrite/day.git" }
+# `open_url` (the desktop auth browser is the default browser) and `on_open_url` (a custom-scheme
+# callback arrives on the deep-link rail). day-core is the crate that owns both rails.
+day-core = { git = "https://github.com/daybrite/day.git" }
+# The token, userinfo, discovery and JWKS requests, through each platform's HTTP stack.
+day-part-http = { git = "https://github.com/daybrite/day.git" }
+# The oneshot behind every future here, and the scope a callback watch lives in.
+day-async = { git = "https://github.com/daybrite/day.git" }
+day-reactive = { git = "https://github.com/daybrite/day.git" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Android reaches its Java arm through day-android's cached JVM and Context.
+[target.'cfg(target_os = "android")'.dependencies]
+day-android = { git = "https://github.com/daybrite/day.git" }
+
+# Windows: passkeys through the platform WebAuthn API (webauthn.dll), the OS random source, and
+# the window the passkey dialog is owned by.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Networking_WindowsWebServices",
+    "Win32_Security_Cryptography",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+day-build = { git = "https://github.com/daybrite/day.git" }
+
+# --- Android backend contribution (https://daybrite.dev/contributing/backend-contracts/extending) ---
+# The Java is a daybridge arm in src/native.rs, rendered and staged by `day build`; what stays
+# here is what its build graph needs. Custom Tabs for the auth browser, Credential Manager for
+# passkeys and Google sign-in, and the Google ID credential type the sign-in returns.
+[package.metadata.day.android]
+gradle-dependencies = [
+    "androidx.browser:browser:1.8.0",
+    "androidx.credentials:credentials:1.5.0",
+    "androidx.credentials:credentials-play-services-auth:1.5.0",
+    "com.google.android.libraries.identity.googleid:googleid:1.1.1",
+]
+permissions = ["android.permission.INTERNET"]
+
+# --- Apple framework linking ---
+# The Swift arm uses AuthenticationServices for the session, Sign in with Apple and passkeys.
+# On iOS xcodebuild links the staticlib and ignores Rust's `#[link]`, so the app links the
+# framework through the generated DayPieces package.
+[package.metadata.day.ios]
+frameworks = ["AuthenticationServices"]
+
+[package.metadata.day.macos]
+frameworks = ["AuthenticationServices"]
+
+[workspace]

@@ -1,0 +1,44 @@
+# The demo's walkthrough (https://daybrite.dev/docs/how-to/dayscript), and the crate's on-device test:
+# it runs on macOS, Windows, Linux, the iOS Simulator, the Android emulator and headless WebKit
+# in CI, and the same command runs it here.
+#
+#     day launch -p macos-appkit --script dayscript/auth.yaml
+#     day launch -p ios-uikit --script dayscript/auth.yaml
+#     day launch -p android-mdc --script dayscript/auth.yaml
+#
+# What a script can check: the page renders, each section reports the part's answer for this
+# target, and the whole OpenID Connect lifecycle runs against the demo provider inside the app
+# with no browser: the silent sign-in (prompt=none), a verified ID token, userinfo, a refresh
+# with rotation, revocation, sign-out. The browser sign-in and the system sheets (passkeys, Apple,
+# Google) need a person, and the web build has no loopback server to run the provider on.
+name: auth
+description: Sign in silently to the demo provider, then refresh, read userinfo, revoke and sign out.
+flow:
+  - wait_for: { id: auth_title }
+  - assert_visible: { id: oidc_browser_support }
+  - assert_visible: { id: oidc_issuer }
+  - assert_visible: { id: passkeys_available }
+  - assert_visible: { id: apple_support }
+  - assert_visible: { id: google_support }
+  - screenshot: auth
+
+  # The silent sign-in: an HTTP client stands in for the browser, the provider approves the
+  # first demo account, and the ID token is verified before the status line changes. HarmonyOS
+  # is left out: its HTTP arm has not been exercised against a cleartext loopback server.
+  - tap: { id: oidc_sign_in_silent, skip_on: [web-dom, harmony-arkui] }
+  - assert_text: { id: oidc_status, key: oidc_signed_in, args: { name: "Ada Lovelace", email: "ada@example.com", sub: "ada" }, timeout_secs: 30, skip_on: [web-dom, harmony-arkui] }
+  - screenshot: auth-signed-in
+  - tap: { id: oidc_userinfo, skip_on: [web-dom, harmony-arkui] }
+  - assert_text: { id: oidc_status, key: oidc_userinfo_ok, args: { sub: "ada" }, timeout_secs: 30, skip_on: [web-dom, harmony-arkui] }
+  - tap: { id: oidc_refresh, skip_on: [web-dom, harmony-arkui] }
+  - assert_text: { id: oidc_status, key: oidc_refreshed, timeout_secs: 30, skip_on: [web-dom, harmony-arkui] }
+  - tap: { id: oidc_revoke, skip_on: [web-dom, harmony-arkui] }
+  - assert_text: { id: oidc_status, key: oidc_revoked, timeout_secs: 30, skip_on: [web-dom, harmony-arkui] }
+  # A revoked token is refused by userinfo.
+  - tap: { id: oidc_userinfo, skip_on: [web-dom, harmony-arkui] }
+  - assert_text: { id: oidc_status, text: "invalid_token", timeout_secs: 30, skip_on: [web-dom, harmony-arkui] }
+  - tap: { id: oidc_sign_out }
+  - assert_text: { id: oidc_status, key: oidc_signed_out }
+  # On the web the provider cannot run, and the buttons say so.
+  - tap: { id: oidc_sign_in_silent, only_on: [web-dom] }
+  - assert_text: { id: oidc_status, text: "not supported on this platform", only_on: [web-dom] }

@@ -1,0 +1,84 @@
+name: ci
+
+# Three questions, answered on every push and once a day:
+#   host        does the crate build, lint, and pass its tests on each desktop, with that host's
+#               own arm compiled in (webauthn.dll on Windows, the HTTP stack each desktop has for
+#               the end-to-end test against the demo provider)?
+#   cross-check do the Rust halves compile for the targets whose arms cargo cannot run here?
+#   demo        does the walkthrough pass on macOS, Windows, Linux, the iOS Simulator, Android,
+#               headless WebKit and the HarmonyOS emulator, against day's newest main?
+#
+# No Cargo.lock is committed, here or in demo/: this crate tracks an unpublished framework by
+# its bare git URL, so every run resolves day afresh at the tip of main and proves the crate
+# against it. A red run after a day push is the signal, not a nuisance.
+on:
+  push:
+    branches: ["**"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Daily: day's main moves on weeks nobody pushes here.
+    - cron: "0 6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  # One row per desktop. The crypto, JOSE, authorization and provider tests are pure Rust; the
+  # end-to-end test (tests/e2e.rs, `demo-provider` feature) runs the crate's client through
+  # day-part-http's own transport on that host (URLSession, WinHTTP, libcurl) against the demo
+  # provider, and skips itself where the host has no HTTP stack.
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --all -- --check
+        if: matrix.os == 'ubuntu-latest'
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --all-targets --features demo-provider -- -D warnings
+      - run: cargo test
+      - run: cargo test --features demo-provider
+
+  # The Rust halves compile for the targets whose arms only a device build can link: the Swift
+  # arm's iOS side, the JNI side of the Java arm, the wasm side of the JavaScript arm.
+  cross-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, target: aarch64-apple-ios-sim }
+          - { os: ubuntu-latest, target: aarch64-linux-android }
+          - { os: ubuntu-latest, target: wasm32-unknown-unknown }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo clippy --target ${{ matrix.target }} --features demo-provider -- -D warnings
+
+  # The proof: the demo app, driven end to end by the shared Day workflow. It builds against day's
+  # newest main, runs dayscript/auth.yaml, and fails on a failed assertion or a blank capture.
+  # The script signs in to the demo provider inside the app with no browser, so it runs unattended
+  # everywhere the provider can listen; the browser and the system sheets are left to a person.
+  demo:
+    uses: daybrite/actions/.github/workflows/dayapp.yml@v1
+    permissions:
+      contents: write # release-asset upload on tag builds
+    secrets: inherit
+    with:
+      project-path: demo
+      targets: windows-winui, macos-appkit, linux-gtk, ios-uikit, android-mdc, web-dom, harmony-arkui
+      update-day-deps: true
+      scripts: dayscript/auth.yaml
+      preflight-checks: fmt, clippy, test
+      ios-devices: |
+        device=iPhone, orientation=portrait
+      android-devices: |
+        device=pixel_7,     os=36, orientation=portrait

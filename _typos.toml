@@ -1,0 +1,10 @@
+# COSE is CBOR Object Signing and Encryption (RFC 9052), the algorithm registry WebAuthn uses.
+[default.extend-identifiers]
+WEBAUTHN_COSE_CREDENTIAL_PARAMETER = "WEBAUTHN_COSE_CREDENTIAL_PARAMETER"
+WEBAUTHN_COSE_CREDENTIAL_PARAMETERS = "WEBAUTHN_COSE_CREDENTIAL_PARAMETERS"
+WEBAUTHN_COSE_CREDENTIAL_PARAMETER_CURRENT_VERSION = "WEBAUTHN_COSE_CREDENTIAL_PARAMETER_CURRENT_VERSION"
+
+[default.extend-words]
+cose = "cose"
+# The RFC 4648 base64 test vectors spell "f", "fo", "foo".
+fo = "fo"

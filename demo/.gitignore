@@ -1,0 +1,44 @@
+/target
+/build
+
+# Cargo.lock too, unlike a real app. This demo exists to prove the crate beside it against day's
+# newest main, so CI resolves a fresh lock on every run (the shared `build-day-app` workflow
+# generates one when none is committed, and `update-day-deps` moves every leg to one tip
+# revision). A committed lock would pin the framework at whatever it was generated against or,
+# after `day patch --local`, record the paths of one developer's machine.
+Cargo.lock
+
+# Machine-local: `day patch --local <day-checkout>` writes this to build against a checkout
+# instead of the git dependency. CI has no such file and resolves git.
+/.cargo/config.toml
+
+# Xcode local state. Optional persistent .xcodeproj folders are source; Xcode’s local state is not.
+# project.xcworkspace holds the SwiftPM resolution for the pieces package day generates under
+# build/, and cannot be relocated out of the project.
+xcuserdata/
+DerivedData/
+**/*.xcodeproj/project.xcworkspace/
+
+# Gradle local state, the android counterpart of the above: platform/android/ is source, but
+# what Gradle generates inside it is not. Gradle writes its caches and per-module build/ trees
+# into the project it builds, so they cannot move under build/ with the rest of day's outputs;
+# `/build` at the top of this file is anchored to the repo root and never matches them. Left
+# untracked they fail the pristine check CI runs before packing an artifact.
+platform/android/.gradle/
+platform/android/**/build/
+platform/android/local.properties
+# Android Studio writes its project model into the Gradle root it opens. The Xcode counterpart
+# (xcuserdata/) is above; this is the same thing for the other IDE, and without it the first
+# person to open platform/android in Studio leaves a dozen untracked files behind.
+platform/android/.idea/
+
+# The website is generated from repo data: the daysite template clone (local preview) and the
+# synthesized data files. Only website/site.toml and website/theme.css are source.
+website/.daysite/
+website/appindex.json
+website/gallery-manifest.json
+
+# HarmonyOS reads its icon media from a fixed place under each module, so `day prepare` links
+# these two directories to the generated set under build/day/host/harmony/media.
+/platform/harmony/entry/src/main/resources/base/media
+/platform/harmony/AppScope/resources/base/media

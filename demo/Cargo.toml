@@ -1,0 +1,47 @@
+[package]
+name = "auth-demo"
+version = "0.1.0"
+edition = "2024"
+# Generates typed `res::` constants from `resource/` (see build.rs).
+build = "build.rs"
+publish = false
+
+[features]
+# `mock` keeps bare cargo and rust-analyzer compiling; `day build` overrides it with
+# `--no-default-features --features <backend>` (https://daybrite.dev/docs/reference/project-structure).
+default = ["mock"]
+appkit = ["day/appkit"]
+gtk = ["day/gtk"]
+uikit = ["day/uikit"]
+mdc = ["day/mdc"]
+dom = ["day/dom"]
+winui = ["day/winui"]
+arkui = ["day/arkui"]
+mock = ["day/mock"]
+
+# rlib for the desktop bin; the mobile pipeline requests staticlib/cdylib via `cargo rustc`.
+[lib]
+# A constant lib name: staged artifacts and the `dayapp::` import never move on a package rename.
+name = "dayapp"
+crate-type = ["rlib"]
+
+[dependencies]
+# The bare canonical URL, no ref: see ../Cargo.toml for why a ref would double the graph. No lock
+# is committed, so every build resolves day at the tip of main.
+day = { git = "https://github.com/daybrite/day.git" }
+# The part under test, by path: a change to the part and to the demo land in one pull request
+# and one CI run. An app depends on it from git instead:
+#     day-part-auth = { git = "https://github.com/daybrite/day-part-auth.git" }
+day-part-auth = { path = ".." }
+# The tokens' claims and the userinfo answer are JSON values the page prints.
+serde_json = "1"
+
+# The built-in demo provider is a loopback HTTP server, which a browser page cannot run; the web
+# build keeps the sign-in UI and signs in to a provider you point it at.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+day-part-auth = { path = "..", features = ["demo-provider"] }
+
+[build-dependencies]
+day-build = { git = "https://github.com/daybrite/day.git" }
+
+[workspace]

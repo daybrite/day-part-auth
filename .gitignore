@@ -1,0 +1,6 @@
+/target
+Cargo.lock
+# `day patch` tables: machine-local paths into a day checkout.
+/.cargo/config.toml
+/demo/.cargo/config.toml
+/demo/target
