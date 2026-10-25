@@ -16,7 +16,7 @@ to the part and a change here land in one pull request and one CI run.
 day doctor                                            # the toolchains for the targets below
 day launch -p macos-appkit --script dayscript/auth.yaml
 day launch -p ios-uikit --script dayscript/auth.yaml
-day launch -p android-mdc --script dayscript/auth.yaml
+day launch -p android-material --script dayscript/auth.yaml
 ```
 
 The script is the test: it signs in silently (`prompt=none`, an HTTP client standing in for the

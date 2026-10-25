@@ -74,7 +74,7 @@ jobs:
     secrets: inherit
     with:
       project-path: demo
-      targets: windows-winui, macos-appkit, linux-gtk, ios-uikit, android-mdc, web-dom, harmony-arkui
+      targets: windows-winui, macos-appkit, linux-gtk, ios-uikit, android-material, web-dom, harmony-arkui
       update-day-deps: true
       scripts: dayscript/auth.yaml
       preflight-checks: fmt, clippy, test

@@ -10,7 +10,7 @@ id = "dev.daybrite.authdemo"
 scheme = "dayauthdemo"
 title = "Auth Demo"
 build = 1
-targets = ["windows-winui", "macos-appkit", "linux-gtk", "ios-uikit", "android-mdc", "web-dom", "harmony-arkui"]
+targets = ["windows-winui", "macos-appkit", "linux-gtk", "ios-uikit", "android-material", "web-dom", "harmony-arkui"]
 
 # The window's geometry in points (https://daybrite.dev/docs/reference/size-classes).
 [window]

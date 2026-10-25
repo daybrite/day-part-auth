@@ -4,7 +4,7 @@
 #
 #     day launch -p macos-appkit --script dayscript/auth.yaml
 #     day launch -p ios-uikit --script dayscript/auth.yaml
-#     day launch -p android-mdc --script dayscript/auth.yaml
+#     day launch -p android-material --script dayscript/auth.yaml
 #
 # What a script can check: the page renders, each section reports the part's answer for this
 # target, and the whole OpenID Connect lifecycle runs against the demo provider inside the app
