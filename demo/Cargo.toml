@@ -28,7 +28,7 @@ crate-type = ["rlib"]
 [dependencies]
 # The bare canonical URL, no ref: see ../Cargo.toml for why a ref would double the graph. No lock
 # is committed, so every build resolves day at the tip of main.
-day = { package = "day-app", git = "https://github.com/daybrite/day.git" }
+day = { package = "day-app", version = "0.6" }
 # The part under test, by path: a change to the part and to the demo land in one pull request
 # and one CI run. An app depends on it from git instead:
 #     day-part-auth = { git = "https://github.com/daybrite/day-part-auth.git" }
@@ -42,6 +42,6 @@ serde_json = "1"
 day-part-auth = { path = "..", features = ["demo-provider"] }
 
 [build-dependencies]
-day-build = { git = "https://github.com/daybrite/day.git" }
+day-build = "0.6"
 
 [workspace]

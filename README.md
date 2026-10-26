@@ -48,7 +48,7 @@ check covers, the error vocabulary, and what each platform needs from the app.
 
 ```toml
 [dependencies]
-day-part-auth = { git = "https://github.com/daybrite/day-part-auth.git" }
+day-part-auth = "0.1"
 ```
 
 ```rust

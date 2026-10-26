@@ -6,17 +6,25 @@ name: ci
 #               the end-to-end test against the demo provider)?
 #   cross-check do the Rust halves compile for the targets whose arms cargo cannot run here?
 #   demo        does the walkthrough pass on macOS, Windows, Linux, the iOS Simulator, Android,
-#               headless WebKit and the HarmonyOS emulator, against day's newest main?
+#               headless WebKit and the HarmonyOS emulator, against day's main or newest release?
 #
-# No Cargo.lock is committed, here or in demo/: this crate tracks an unpublished framework by
-# its bare git URL, so every run resolves day afresh at the tip of main and proves the crate
-# against it. A red run after a day push is the signal, not a nuisance.
+# No Cargo.lock is committed, here or in demo/: every run resolves day afresh. A push builds against the
+# head of day's main (and of every other Day repository it uses), and the nightly run against
+# the newest releases on crates.io (daybrite/actions' day-deps). A red push run after a day push
+# is the signal, not a nuisance; a red nightly run means this crate needs a day that is not
+# released yet. There is no pinned lock for a local `day patch` table to rewrite and commit by
+# accident.
 on:
   push:
     branches: ["**"]
     tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      day-main:
+        description: Build against day's main branch instead of the newest release
+        type: boolean
+        default: false
   schedule:
     # Daily: day's main moves on weeks nobody pushes here.
     - cron: "0 6 * * *"
@@ -38,6 +46,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      # Day from crates.io, or from main on a push (daybrite/actions day-deps).
+      - uses: daybrite/actions/.github/actions/day-deps@v1
+        with:
+          day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
       - run: cargo fmt --all -- --check
         if: matrix.os == 'ubuntu-latest'
       - run: cargo clippy --all-targets -- -D warnings
@@ -61,6 +73,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      # Day from crates.io, or from main on a push (daybrite/actions day-deps).
+      - uses: daybrite/actions/.github/actions/day-deps@v1
+        with:
+          day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
       - run: cargo clippy --target ${{ matrix.target }} --features demo-provider -- -D warnings
 
   # The proof: the demo app, driven end to end by the shared Day workflow. It builds against day's
@@ -71,11 +87,14 @@ jobs:
     uses: daybrite/actions/.github/workflows/dayapp.yml@v1
     permissions:
       contents: write # release-asset upload on tag builds
+      id-token: write # crates.io Trusted Publishing (publish-crates)
     secrets: inherit
     with:
       project-path: demo
       targets: windows-winui, macos-appkit, linux-gtk, ios-uikit, android-material, web-dom, harmony-arkui
-      update-day-deps: true
+      day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
+      # On a version tag, after every leg passed: the library crates to crates.io.
+      publish-crates: true
       scripts: dayscript/auth.yaml
       preflight-checks: fmt, clippy, test
       # This iPhone-only demo does not use the runner's preconfigured Watch pairs. Remove them
