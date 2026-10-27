@@ -1,19 +1,11 @@
 name: ci
 
-# Three questions, answered on every push and once a day:
-#   host        does the crate build, lint, and pass its tests on each desktop, with that host's
-#               own arm compiled in (webauthn.dll on Windows, the HTTP stack each desktop has for
-#               the end-to-end test against the demo provider)?
-#   cross-check do the Rust halves compile for the targets whose arms cargo cannot run here?
-#   demo        does the walkthrough pass on macOS, Windows, Linux, the iOS Simulator, Android,
-#               headless WebKit and the HarmonyOS emulator, against day's main or newest release?
-#
-# No Cargo.lock is committed, here or in demo/: every run resolves day afresh. A push builds against the
-# head of day's main (and of every other Day repository it uses), and the nightly run against
-# the newest releases on crates.io (daybrite/actions' day-deps). A red push run after a day push
-# is the signal, not a nuisance; a red nightly run means this crate needs a day that is not
-# released yet. There is no pinned lock for a local `day patch` table to rewrite and commit by
-# accident.
+# The shared Day library workflow (daybrite/actions' daylib.yml) reads what to check from this
+# repository's manifests: clippy and test on Linux, macOS and Windows, with each toolkit feature on
+# the OS it draws on; clippy for the mobile and web targets demo/Day.toml declares, and the demo's
+# walkthrough on every one of them. A push builds against the head of day's main and of every other
+# Day repository it uses; the nightly run builds against the newest releases on crates.io. A version
+# tag publishes the crate once the host and cross-target checks pass.
 on:
   push:
     branches: ["**"]
@@ -26,83 +18,23 @@ on:
         type: boolean
         default: false
   schedule:
-    # Daily: day's main moves on weeks nobody pushes here.
     - cron: "0 6 * * *"
 
 permissions:
   contents: read
 
 jobs:
-  # One row per desktop. The crypto, JOSE, authorization and provider tests are pure Rust; the
-  # end-to-end test (tests/e2e.rs, `demo-provider` feature) runs the crate's client through
-  # day-part-http's own transport on that host (URLSession, WinHTTP, libcurl) against the demo
-  # provider, and skips itself where the host has no HTTP stack.
-  host:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      # Day from crates.io, or from main on a push (daybrite/actions day-deps).
-      - uses: daybrite/actions/.github/actions/day-deps@v1
-        with:
-          day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
-      - run: cargo fmt --all -- --check
-        if: matrix.os == 'ubuntu-latest'
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy --all-targets --features demo-provider -- -D warnings
-      - run: cargo test
-      - run: cargo test --features demo-provider
-
-  # The Rust halves compile for the targets whose arms only a device build can link: the Swift
-  # arm's iOS side, the JNI side of the Java arm, the wasm side of the JavaScript arm.
-  cross-check:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: macos-15, target: aarch64-apple-ios-sim }
-          - { os: ubuntu-latest, target: aarch64-linux-android }
-          - { os: ubuntu-latest, target: wasm32-unknown-unknown }
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      # Day from crates.io, or from main on a push (daybrite/actions day-deps).
-      - uses: daybrite/actions/.github/actions/day-deps@v1
-        with:
-          day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
-      - run: cargo clippy --target ${{ matrix.target }} --features demo-provider -- -D warnings
-
-  # The proof: the demo app, driven end to end by the shared Day workflow. It builds against day's
-  # newest main, runs dayscript/auth.yaml, and fails on a failed assertion or a blank capture.
-  # The script signs in to the demo provider inside the app with no browser, so it runs unattended
-  # everywhere the provider can listen; the browser and the system sheets are left to a person.
-  demo:
-    uses: daybrite/actions/.github/workflows/dayapp.yml@v1
+  ci:
+    uses: daybrite/actions/.github/workflows/daylib.yml@v1
     permissions:
-      contents: write # release-asset upload on tag builds
-      id-token: write # crates.io Trusted Publishing (publish-crates)
+      contents: write # the demo's release assets on a version tag
+      pages: write # the project website
+      id-token: write # crates.io Trusted Publishing, and the Pages deploy
     secrets: inherit
     with:
-      project-path: demo
-      targets: windows-winui, macos-appkit, linux-gtk, ios-uikit, android-material, web-dom, harmony-arkui
-      day-deps: ${{ inputs.day-main && 'main' || 'auto' }}
-      # On a version tag, after every leg passed: the library crates to crates.io.
-      publish-crates: true
-      scripts: dayscript/auth.yaml
-      preflight-checks: fmt, clippy, test
-      # This iPhone-only demo does not use the runner's preconfigured Watch pairs. Remove them
-      # before Xcode loads CoreSimulator: the Xcode 27 image can abort in addDevicePairAsync
-      # with "Invalid parameter not satisfying: devicePair" after the simulator boots.
+      day-main: ${{ inputs.day-main || false }}
+      # The demo provider (a loopback OpenID Connect server) is checked beside the default build.
+      feature-sets: --features demo-provider
+      # This iPhone-only demo does not use the runner's preconfigured Watch pairs.
       target-setup: |
         ios-uikit: xcrun simctl list pairs --json | jq -r '.pairs | keys[]' | while IFS= read -r pair; do xcrun simctl unpair "$pair"; done
-      ios-devices: |
-        device=iPhone, orientation=portrait
-      android-devices: |
-        device=pixel_7,     os=36, orientation=portrait
