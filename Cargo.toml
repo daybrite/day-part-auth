@@ -19,11 +19,8 @@ license = "MPL-2.0"
 # `src/native.rs` carries every foreign arm (Swift, Java, JavaScript) under one declaration;
 # `build.rs` generates the glue (https://daybrite.dev/contributing/backend-contracts/bridge).
 #
-# Every day dependency names the bare canonical URL: no branch, tag, or rev. Cargo unifies a git
-# dependency only when URL and ref match, so an app on `git = "…/day.git"` and a part pinned to
-# a tag would carry two copies of every day crate; leaving the ref off lets the app's Cargo.lock
-# choose one revision for the whole graph. `demo/Cargo.lock` is not committed either: CI proves
-# the crate against day's newest main, and `compat` below says which day minor that is.
+# Daybrite-owned dependencies accept every stable 0.x release. Apps retain a tested
+# dependency set with Cargo.lock; updating it may require source changes.
 #
 # Dependency budget. No crypto crate: the SHA-256, HMAC, base64url, RSA and P-256 the client
 # needs are a few hundred lines in `src/crypto.rs`, each checked against published test vectors
@@ -31,8 +28,8 @@ license = "MPL-2.0"
 # JSON is serde_json (what the rest of Day uses).
 
 [package.metadata.day]
-# The day minor this release is built and tested against. `day build` notes a mismatch.
-compat = "0.6"
+# Accept the pre-1.0 series; source compatibility between releases is not guaranteed.
+compat = "0.*"
 
 [features]
 default = []
@@ -44,21 +41,21 @@ demo-provider = []
 
 [dependencies]
 # `Support`, `Error`, and the callback tier the foreign arms answer through.
-day-bridge = "0.6"
+day-bridge = "0.*"
 # `open_url` (the desktop auth browser is the default browser) and `on_open_url` (a custom-scheme
 # callback arrives on the deep-link rail). day-core is the crate that owns both rails.
-day-core = "0.6"
+day-core = "0.*"
 # The token, userinfo, discovery and JWKS requests, through each platform's HTTP stack.
-day-part-http = "0.6"
+day-part-http = "0.*"
 # The oneshot behind every future here, and the scope a callback watch lives in.
-day-async = "0.6"
-day-reactive = "0.6"
+day-async = "0.*"
+day-reactive = "0.*"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Android reaches its Java arm through day-platform-android's cached JVM and Context.
 [target.'cfg(target_os = "android")'.dependencies]
-day-platform-android = "0.6"
+day-platform-android = "0.*"
 
 # Windows: passkeys through the platform WebAuthn API (webauthn.dll), the OS random source, and
 # the window the passkey dialog is owned by.
@@ -73,7 +70,7 @@ windows = { version = "0.62", features = [
 ] }
 
 [build-dependencies]
-day-build = "0.6"
+day-build = "0.*"
 
 # --- Android backend contribution (https://daybrite.dev/contributing/backend-contracts/extending) ---
 # The Java is a daybridge arm in src/native.rs, rendered and staged by `day build`; what stays
