@@ -81,15 +81,27 @@ impl Provider {
     /// (OpenID Connect Discovery §4.3). The issuer must be `https`, or loopback for a local
     /// provider such as the demo one.
     pub async fn discover(issuer: &str) -> Result<Provider, AuthError> {
-        let issuer = issuer.trim_end_matches('/');
+        let parsed = crate::urls::endpoint(issuer)?;
+        if parsed.query().is_some() {
+            return Err(AuthError::InvalidRequest(
+                "an issuer cannot contain a query".into(),
+            ));
+        }
         if !is_trusted_url(issuer) {
             return Err(AuthError::InvalidRequest(
                 "the issuer must be an https URL".into(),
             ));
         }
-        let document: Provider =
-            get_json(&format!("{issuer}/.well-known/openid-configuration"), None).await?;
-        match document.issuer.as_deref().map(|i| i.trim_end_matches('/')) {
+        let document: Provider = get_json(
+            &format!(
+                "{}/.well-known/openid-configuration",
+                issuer.trim_end_matches('/')
+            ),
+            None,
+        )
+        .await?;
+        document.validate()?;
+        match document.issuer.as_deref() {
             Some(named) if named == issuer => Ok(document),
             Some(named) => Err(AuthError::InvalidToken(format!(
                 "the discovery document names issuer {named:?}, not {issuer:?}"
@@ -98,6 +110,31 @@ impl Provider {
                 "the discovery document names no issuer".into(),
             )),
         }
+    }
+
+    /// Validate endpoints before opening a browser or sending credentials.
+    pub fn validate(&self) -> Result<(), AuthError> {
+        for endpoint in [
+            Some(self.authorization_endpoint.as_str()),
+            Some(self.token_endpoint.as_str()),
+            self.userinfo_endpoint.as_deref(),
+            self.jwks_uri.as_deref(),
+            self.revocation_endpoint.as_deref(),
+            self.end_session_endpoint.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            crate::urls::endpoint(endpoint)?;
+        }
+        if let Some(issuer) = &self.issuer
+            && crate::urls::endpoint(issuer)?.query().is_some()
+        {
+            return Err(AuthError::InvalidRequest(
+                "an issuer cannot contain a query".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Whether the provider says it takes PKCE with S256. Unstated counts as yes: the client
@@ -113,10 +150,7 @@ impl Provider {
 
 /// `https://…`, or `http://` on the loopback interface.
 pub(crate) fn is_trusted_url(url: &str) -> bool {
-    url.starts_with("https://")
-        || url.starts_with("http://127.0.0.1")
-        || url.starts_with("http://localhost")
-        || url.starts_with("http://[::1]")
+    crate::urls::endpoint(url).is_ok()
 }
 
 #[cfg(test)]

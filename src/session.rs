@@ -115,7 +115,7 @@ pub fn capabilities() -> SessionCapabilities {
 }
 
 /// Open `url` in the system's sign-in browser and resolve with the callback URL once the
-/// provider redirects to `callback_prefix` (compared by prefix, case-sensitively). The person
+/// provider returns to the exact callback endpoint, preserving its registered query fields. The person
 /// dismissing the browser resolves with [`AuthError::Cancelled`].
 ///
 /// Call it on the UI thread: the custom-scheme platforms register for the callback on the
@@ -133,7 +133,16 @@ pub fn open(
         options,
         Box::new(move |answer| tx.send(answer)),
     );
-    async move { rx.await.unwrap_or(Err(AuthError::Cancelled)) }
+    let expected = callback_prefix.to_string();
+    async move {
+        let received = rx.await.unwrap_or(Err(AuthError::Cancelled))?;
+        if !crate::urls::callback_matches(&expected, &received) {
+            return Err(AuthError::InvalidRequest(
+                "authentication callback endpoint mismatch".into(),
+            ));
+        }
+        Ok(received)
+    }
 }
 
 /// The page's own URL without its fragment, on the web: the redirect the popup flow returns to,
@@ -156,16 +165,13 @@ pub fn cancel() {
 type OnDone = Box<dyn FnOnce(Result<String, AuthError>) + Send>;
 
 fn start(url: &str, callback_prefix: &str, options: &SessionOptions, on_done: OnDone) {
-    if callback_prefix.is_empty() || !callback_prefix.contains(':') {
+    if crate::urls::parse(callback_prefix).is_err() {
         on_done(Err(AuthError::InvalidRequest(
             "the callback must be an absolute URL".into(),
         )));
         return;
     }
-    if !(url.starts_with("https://")
-        || url.starts_with("http://127.0.0.1")
-        || url.starts_with("http://localhost"))
-    {
+    if !crate::provider::is_trusted_url(url) {
         on_done(Err(AuthError::InvalidRequest(
             "the sign-in URL must be https (or loopback for a local provider)".into(),
         )));
@@ -225,7 +231,7 @@ fn watch_rail(prefix: String, deliver: Arc<dyn Fn(Result<String, AuthError>) + S
     let scope = day_reactive::Scope::child();
     scope.enter(|| {
         day_core::on_open_url(move |url| {
-            if url.starts_with(&prefix) {
+            if crate::urls::callback_matches(&prefix, &url) {
                 deliver(Ok(url.to_string()));
                 unwatch_rail();
                 true

@@ -55,6 +55,7 @@ pub mod passkeys;
 pub mod provider;
 pub mod session;
 pub mod tokens;
+mod urls;
 
 pub use authorize::{Authorization, Client, Redirect};
 pub use provider::Provider;

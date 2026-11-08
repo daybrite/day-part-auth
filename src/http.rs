@@ -107,9 +107,20 @@ fn provider_error(status: u16, body: &[u8]) -> AuthError {
 }
 
 async fn send(request: day_part_http::Request) -> Result<day_part_http::Response, AuthError> {
-    let response = day_part_http::fetch_future(request)
+    crate::urls::endpoint(request.url())?;
+    let client = day_part_http::Client::builder()
+        .redirects(day_part_http::Redirects::Never)
+        .timeout_total(std::time::Duration::from_secs(30))
+        .build();
+    let response = client
+        .fetch_limited_future(request, 1024 * 1024)
         .await
         .map_err(|e| AuthError::Network(e.to_string()))?;
+    if (300..400).contains(&response.status) {
+        return Err(AuthError::Network(
+            "authentication endpoint redirected; use its final URL".into(),
+        ));
+    }
     if response.status >= 400 {
         return Err(provider_error(response.status, &response.body));
     }

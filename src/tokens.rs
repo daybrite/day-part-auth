@@ -156,7 +156,7 @@ async fn token_set_from(
     };
     let id_token = match response.id_token.as_deref() {
         Some(raw) => Some(verify_id_token(client, raw, nonce, Some(&response.access_token)).await?),
-        None if client.is_openid() => {
+        None if client.is_openid() && previous_refresh.is_none() => {
             return Err(AuthError::InvalidToken(
                 "openid was asked for but no ID token came back".into(),
             ));
@@ -166,7 +166,7 @@ async fn token_set_from(
     Ok(TokenSet {
         access_token: response.access_token,
         token_type: response.token_type.unwrap_or_else(|| "Bearer".into()),
-        expires_at: expires_in.map(|s| SystemTime::now() + Duration::from_secs(s)),
+        expires_at: expires_in.and_then(|s| SystemTime::now().checked_add(Duration::from_secs(s))),
         refresh_token: response
             .refresh_token
             .or_else(|| previous_refresh.map(str::to_string)),
@@ -196,6 +196,7 @@ pub async fn exchange(
     request: Authorization,
     callback_url: &str,
 ) -> Result<TokenSet, AuthError> {
+    request.validate_client(client)?;
     let code = request.code_from(callback_url)?;
     let (basic, mut fields) = client_auth(client);
     fields.push(("grant_type", "authorization_code"));

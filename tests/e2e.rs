@@ -41,6 +41,65 @@ fn http_available() -> bool {
 }
 
 #[test]
+fn exchanging_through_another_provider_is_rejected_before_network_access() {
+    let original = Client::new(Provider::google(), "fixture")
+        .redirect(Redirect::Scheme("fixture://callback".into()));
+    let request = original.start().expect("request");
+    let callback = format!(
+        "fixture://callback?code=private-code&state={}",
+        request.state()
+    );
+    let other = Client::new(
+        Provider::new("https://other.test/auth", "https://other.test/token"),
+        "fixture",
+    );
+    assert!(matches!(
+        block_on(other.complete(request, &callback)),
+        Err(AuthError::InvalidRequest(_))
+    ));
+}
+
+#[test]
+fn token_redirects_do_not_replay_credentials_to_another_endpoint() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    let destination = TcpListener::bind("127.0.0.1:0").expect("destination");
+    destination.set_nonblocking(true).expect("nonblocking");
+    let redirector = TcpListener::bind("127.0.0.1:0").expect("redirector");
+    let endpoint = format!("http://{}/token", redirector.local_addr().expect("address"));
+    let location = format!(
+        "http://{}/stolen",
+        destination.local_addr().expect("address")
+    );
+    let server = std::thread::spawn(move || {
+        let (mut socket, _) = redirector.accept().expect("request");
+        socket
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .expect("timeout");
+        let mut bytes = [0; 8192];
+        let _ = socket.read(&mut bytes).expect("headers");
+        write!(socket, "HTTP/1.1 307 Temporary Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").expect("redirect");
+    });
+    let client = Client::new(
+        Provider::new("https://provider.test/auth", endpoint),
+        "fixture",
+    )
+    .scopes(["profile"]);
+    assert!(matches!(
+        block_on(client.refresh("synthetic-refresh-token")),
+        Err(AuthError::Network(_))
+    ));
+    server.join().expect("server");
+    assert_eq!(
+        destination
+            .accept()
+            .expect_err("credentials must not reach redirect target")
+            .kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
+#[test]
 fn discovery_matches_the_provider_description() {
     if !http_available() {
         eprintln!("skipped: no HTTP stack on this host");
@@ -49,8 +108,8 @@ fn discovery_matches_the_provider_description() {
     let demo = DemoProvider::start(DemoConfig::default()).expect("start");
     let discovered = block_on(Provider::discover(demo.issuer())).expect("discover");
     assert_eq!(discovered, demo.provider());
-    // A trailing slash is tolerated; another issuer is not.
-    assert!(block_on(Provider::discover(&format!("{}/", demo.issuer()))).is_ok());
+    // Issuer identifiers match exactly; a trailing slash changes the identifier.
+    assert!(block_on(Provider::discover(&format!("{}/", demo.issuer()))).is_err());
     assert!(matches!(
         block_on(Provider::discover("http://example.com")),
         Err(AuthError::InvalidRequest(_))

@@ -15,7 +15,7 @@
 use crate::AuthError;
 use crate::crypto;
 use crate::http::{query_of, with_query};
-use crate::provider::{Provider, is_trusted_url};
+use crate::provider::Provider;
 use crate::session::{Loopback, SessionOptions};
 
 /// Where the provider sends the person back.
@@ -135,9 +135,28 @@ impl Client {
         if self.client_id.is_empty() {
             return Err(AuthError::InvalidRequest("the client id is empty".into()));
         }
-        if !is_trusted_url(&self.provider.authorization_endpoint) {
+        self.provider.validate()?;
+        let reserved = [
+            "response_type",
+            "client_id",
+            "redirect_uri",
+            "scope",
+            "state",
+            "nonce",
+            "code_challenge",
+            "code_challenge_method",
+        ];
+        let endpoint = crate::urls::endpoint(&self.provider.authorization_endpoint)?;
+        if self
+            .extra
+            .iter()
+            .any(|(key, _)| reserved.contains(&key.as_str()))
+            || endpoint
+                .query_pairs()
+                .any(|(key, _)| reserved.contains(&key.as_ref()))
+        {
             return Err(AuthError::InvalidRequest(
-                "the authorization endpoint must be an https URL".into(),
+                "authorization parameters cannot override protocol fields".into(),
             ));
         }
         let (redirect_uri, loopback) = resolve_redirect(&self.redirect)?;
@@ -175,6 +194,7 @@ impl Client {
         }
         let url = with_query(&self.provider.authorization_endpoint, &fields);
         Ok(Authorization {
+            client: self.clone(),
             url,
             redirect_uri,
             state,
@@ -188,6 +208,7 @@ impl Client {
 /// One authorization request in flight: the URL to open, and what the callback is checked
 /// against. Consumed by `complete`.
 pub struct Authorization {
+    client: Client,
     url: String,
     redirect_uri: String,
     state: String,
@@ -197,6 +218,15 @@ pub struct Authorization {
 }
 
 impl Authorization {
+    pub(crate) fn validate_client(&self, client: &Client) -> Result<(), AuthError> {
+        if &self.client != client {
+            return Err(AuthError::InvalidRequest(
+                "authorization belongs to a different client configuration".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// The URL to open in the auth browser.
     pub fn url(&self) -> &str {
         &self.url
@@ -233,12 +263,18 @@ impl Authorization {
     /// Check the callback URL's `state` and read its `code`, or the error the provider sent
     /// (RFC 6749 §4.1.2.1). The state comparison does not stop at the first difference.
     pub fn code_from(&self, callback_url: &str) -> Result<String, AuthError> {
-        if !callback_url.starts_with(&self.redirect_uri) {
+        if !crate::urls::callback_matches(&self.redirect_uri, callback_url) {
             return Err(AuthError::InvalidRequest(
                 "the callback is not for this request's redirect".into(),
             ));
         }
         let query = query_of(callback_url);
+        let mut names = std::collections::HashSet::new();
+        if query.iter().any(|(key, _)| !names.insert(key)) {
+            return Err(AuthError::InvalidRequest(
+                "duplicate authorization response parameter".into(),
+            ));
+        }
         let get = |name: &str| {
             query
                 .iter()
@@ -248,6 +284,18 @@ impl Authorization {
         match get("state") {
             Some(state) if crypto::constant_time_eq(state.as_bytes(), self.state.as_bytes()) => {}
             _ => return Err(AuthError::StateMismatch),
+        }
+        if let Some(issuer) = get("iss")
+            && self.client.provider.issuer.as_deref() != Some(issuer)
+        {
+            return Err(AuthError::InvalidRequest(
+                "authorization response issuer mismatch".into(),
+            ));
+        }
+        if get("code").is_some() && get("error").is_some() {
+            return Err(AuthError::InvalidRequest(
+                "authorization response contains both code and error".into(),
+            ));
         }
         if let Some(error) = get("error") {
             return Err(AuthError::Provider {
@@ -268,7 +316,12 @@ impl Authorization {
 fn resolve_redirect(redirect: &Redirect) -> Result<(String, Option<Loopback>), AuthError> {
     match redirect {
         Redirect::Scheme(url) => {
-            if !url.contains("://") || url.starts_with("http://") || url.starts_with("https://") {
+            if !url.contains("://")
+                || matches!(
+                    crate::urls::parse(url)?.scheme(),
+                    "http" | "https" | "javascript" | "data" | "file"
+                )
+            {
                 return Err(AuthError::InvalidRequest(
                     "a scheme redirect is `<scheme>://<path>` with the app's own scheme".into(),
                 ));
@@ -276,7 +329,7 @@ fn resolve_redirect(redirect: &Redirect) -> Result<(String, Option<Loopback>), A
             Ok((url.clone(), None))
         }
         Redirect::Https(url) => {
-            if !url.starts_with("https://") {
+            if crate::urls::endpoint(url)?.scheme() != "https" {
                 return Err(AuthError::InvalidRequest(
                     "an https redirect must start with https://".into(),
                 ));
@@ -327,6 +380,44 @@ pub fn app_scheme() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn callback_spoofing_and_ambiguous_parameters_are_rejected() {
+        let client = Client::new(Provider::google(), "fixture")
+            .redirect(Redirect::Scheme("fixture://auth/callback".into()));
+        let request = client.start().expect("request");
+        for suffix in [
+            "/extra?code=x&state=",
+            ".evil?code=x&state=",
+            "?code=x&code=y&state=",
+            "?code=x&error=access_denied&state=",
+            "?code=x&iss=https%3A%2F%2Fevil.test&state=",
+        ] {
+            let callback = format!("fixture://auth/callback{suffix}{}", request.state());
+            assert!(request.code_from(&callback).is_err(), "{suffix}");
+        }
+        assert!(request.validate_client(&client.clone()).is_ok());
+        assert!(
+            request
+                .validate_client(&client.clone().param("prompt", "login"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn custom_parameters_cannot_replace_protocol_fields() {
+        let client = Client::new(Provider::google(), "fixture")
+            .redirect(Redirect::Scheme("fixture://callback".into()));
+        assert!(client.clone().param("state", "fixed").start().is_err());
+        assert!(
+            client
+                .clone()
+                .param("code_challenge", "fixed")
+                .start()
+                .is_err()
+        );
+        assert!(client.param("prompt", "login").start().is_ok());
+    }
 
     fn client() -> Client {
         Client::new(Provider::new("https://p/auth", "https://p/token"), "app")
