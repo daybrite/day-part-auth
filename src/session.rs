@@ -231,7 +231,7 @@ fn watch_rail(prefix: String, deliver: Arc<dyn Fn(Result<String, AuthError>) + S
     let scope = day_reactive::Scope::child();
     scope.enter(|| {
         day_core::on_open_url(move |url| {
-            if crate::urls::callback_matches(&prefix, &url) {
+            if crate::urls::callback_matches(&prefix, url) {
                 deliver(Ok(url.to_string()));
                 unwatch_rail();
                 true

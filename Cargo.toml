@@ -1,6 +1,6 @@
 [package]
 name = "day-part-auth"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.89"
 description = "Sign-in for Day apps: OAuth 2.0 and OpenID Connect through the system's auth browser, Sign in with Apple, Google, and passkeys"
