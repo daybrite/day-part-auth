@@ -20,18 +20,81 @@ use crate::AuthError;
 // ---------------------------------------------------------------------------
 
 const K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    0x428a_2f98,
+    0x7137_4491,
+    0xb5c0_fbcf,
+    0xe9b5_dba5,
+    0x3956_c25b,
+    0x59f1_11f1,
+    0x923f_82a4,
+    0xab1c_5ed5,
+    0xd807_aa98,
+    0x1283_5b01,
+    0x2431_85be,
+    0x550c_7dc3,
+    0x72be_5d74,
+    0x80de_b1fe,
+    0x9bdc_06a7,
+    0xc19b_f174,
+    0xe49b_69c1,
+    0xefbe_4786,
+    0x0fc1_9dc6,
+    0x240c_a1cc,
+    0x2de9_2c6f,
+    0x4a74_84aa,
+    0x5cb0_a9dc,
+    0x76f9_88da,
+    0x983e_5152,
+    0xa831_c66d,
+    0xb003_27c8,
+    0xbf59_7fc7,
+    0xc6e0_0bf3,
+    0xd5a7_9147,
+    0x06ca_6351,
+    0x1429_2967,
+    0x27b7_0a85,
+    0x2e1b_2138,
+    0x4d2c_6dfc,
+    0x5338_0d13,
+    0x650a_7354,
+    0x766a_0abb,
+    0x81c2_c92e,
+    0x9272_2c85,
+    0xa2bf_e8a1,
+    0xa81a_664b,
+    0xc24b_8b70,
+    0xc76c_51a3,
+    0xd192_e819,
+    0xd699_0624,
+    0xf40e_3585,
+    0x106a_a070,
+    0x19a4_c116,
+    0x1e37_6c08,
+    0x2748_774c,
+    0x34b0_bcb5,
+    0x391c_0cb3,
+    0x4ed8_aa4a,
+    0x5b9c_ca4f,
+    0x682e_6ff3,
+    0x748f_82ee,
+    0x78a5_636f,
+    0x84c8_7814,
+    0x8cc7_0208,
+    0x90be_fffa,
+    0xa450_6ceb,
+    0xbef9_a3f7,
+    0xc671_78f2,
 ];
 
 const H0: [u32; 8] = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    0x6a09_e667,
+    0xbb67_ae85,
+    0x3c6e_f372,
+    0xa54f_f53a,
+    0x510e_527f,
+    0x9b05_688c,
+    0x1f83_d9ab,
+    0x5be0_cd19,
 ];
 
 /// The SHA-256 digest of `data`.
@@ -215,6 +278,11 @@ pub fn hex_decode(text: &str) -> Option<Vec<u8>> {
 // ---------------------------------------------------------------------------
 
 /// `n` bytes from the operating system's random source.
+///
+/// # Errors
+///
+/// Returns [`AuthError::Platform`] when the system source fails, and
+/// [`AuthError::Unsupported`] on a platform with none.
 pub fn random_bytes(n: usize) -> Result<Vec<u8>, AuthError> {
     #[cfg(any(unix, target_env = "ohos"))]
     {
@@ -253,6 +321,10 @@ pub fn random_bytes(n: usize) -> Result<Vec<u8>, AuthError> {
 }
 
 /// A base64url string of `n` random bytes: `state`, `nonce`, a PKCE verifier.
+///
+/// # Errors
+///
+/// Fails as [`random_bytes`] does.
 pub fn random_token(n: usize) -> Result<String, AuthError> {
     random_bytes(n).map(|b| base64url(&b))
 }
@@ -344,6 +416,7 @@ impl BigUint {
             .is_some_and(|l| (l >> (i % 32)) & 1 == 1)
     }
 
+    #[must_use]
     pub fn add(&self, other: &BigUint) -> BigUint {
         let (long, short) = if self.limbs.len() >= other.limbs.len() {
             (self, other)
@@ -352,10 +425,8 @@ impl BigUint {
         };
         let mut limbs = Vec::with_capacity(long.limbs.len() + 1);
         let mut carry = 0u64;
-        for i in 0..long.limbs.len() {
-            let sum = u64::from(long.limbs[i])
-                + u64::from(short.limbs.get(i).copied().unwrap_or(0))
-                + carry;
+        for (i, &limb) in long.limbs.iter().enumerate() {
+            let sum = u64::from(limb) + u64::from(short.limbs.get(i).copied().unwrap_or(0)) + carry;
             limbs.push(sum as u32);
             carry = sum >> 32;
         }
@@ -374,10 +445,9 @@ impl BigUint {
         }
         let mut limbs = Vec::with_capacity(self.limbs.len());
         let mut borrow = 0i64;
-        for i in 0..self.limbs.len() {
-            let diff = i64::from(self.limbs[i])
-                - i64::from(other.limbs.get(i).copied().unwrap_or(0))
-                - borrow;
+        for (i, &limb) in self.limbs.iter().enumerate() {
+            let diff =
+                i64::from(limb) - i64::from(other.limbs.get(i).copied().unwrap_or(0)) - borrow;
             if diff < 0 {
                 limbs.push((diff + (1i64 << 32)) as u32);
                 borrow = 1;
@@ -391,6 +461,7 @@ impl BigUint {
         Some(b)
     }
 
+    #[must_use]
     pub fn mul(&self, other: &BigUint) -> BigUint {
         if self.is_zero() || other.is_zero() {
             return BigUint::zero();
@@ -482,7 +553,7 @@ impl BigUint {
                 carry = p >> 32;
                 let t = i64::from(u[i + j]) - borrow - i64::from(p as u32);
                 u[i + j] = t as u32;
-                borrow = if t < 0 { 1 } else { 0 };
+                borrow = i64::from(t < 0);
             }
             let t = i64::from(u[j + n]) - borrow - carry as i64;
             u[j + n] = t as u32;
@@ -573,9 +644,9 @@ impl Ord for BigUint {
             return self.limbs.len().cmp(&other.limbs.len());
         }
         for i in (0..self.limbs.len()).rev() {
-            match self.limbs[i].cmp(&other.limbs[i]) {
-                Ordering::Equal => continue,
-                o => return o,
+            let o = self.limbs[i].cmp(&other.limbs[i]);
+            if o != Ordering::Equal {
+                return o;
             }
         }
         Ordering::Equal
@@ -1054,8 +1125,8 @@ mod tests {
     /// A simple generator for arithmetic cross-checks (not for keys).
     fn lcg(seed: &mut u64) -> u32 {
         *seed = seed
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
         (*seed >> 33) as u32
     }
 
@@ -1085,7 +1156,7 @@ mod tests {
             }
             // a == q*b + r with r < b
             let (q, r) = a.divrem(&b).expect("division");
-            assert!(r.cmp(&b) == Ordering::Less);
+            assert_eq!(r.cmp(&b), Ordering::Less);
             assert_eq!(q.mul(&b).add(&r), a);
             // (a * b) / b == a
             assert_eq!(a.mul(&b).divrem(&b).map(|(q, _)| q), Some(a.clone()));
@@ -1110,12 +1181,12 @@ mod tests {
         let b = from_hex("800000000000000000000001");
         let (q, r) = a.divrem(&b).expect("division");
         assert_eq!(q.mul(&b).add(&r), a);
-        assert!(r.cmp(&b) == Ordering::Less);
+        assert_eq!(r.cmp(&b), Ordering::Less);
         let a = from_hex("ffffffffffffffffffffffffffffffffffffffffffffffff");
         let b = from_hex("ffffffffffffffff0000000000000001");
         let (q, r) = a.divrem(&b).expect("division");
         assert_eq!(q.mul(&b).add(&r), a);
-        assert!(r.cmp(&b) == Ordering::Less);
+        assert_eq!(r.cmp(&b), Ordering::Less);
         let a = from_hex("7fffffff80000000000000007fffffff");
         let b = from_hex("7fffffff80000000");
         let (q, r) = a.divrem(&b).expect("division");

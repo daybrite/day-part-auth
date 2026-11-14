@@ -121,6 +121,12 @@ pub fn capabilities() -> SessionCapabilities {
 /// Call it on the UI thread: the custom-scheme platforms register for the callback on the
 /// deep-link rail, which lives there. The future is `Send`; awaited under `day::task` the
 /// continuation runs on the UI thread again.
+///
+/// # Errors
+///
+/// The future resolves to [`AuthError::Cancelled`] when the person dismisses the browser,
+/// [`AuthError::InvalidRequest`] when `url` or the callback is unusable here, and the
+/// platform's error otherwise.
 pub fn open(
     url: &str,
     callback_prefix: &str,
@@ -270,6 +276,10 @@ pub struct Loopback {
 impl Loopback {
     /// Bind `127.0.0.1:port` (0 for any free port) and build the redirect URI with the port
     /// the OS gave and `path` (`/callback` by default).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::Platform`] when the port cannot be bound.
     pub fn bind(port: u16, path: &str) -> Result<Loopback, AuthError> {
         let listener = TcpListener::bind(("127.0.0.1", port))
             .map_err(|e| AuthError::Platform(format!("loopback listener: {e}")))?;
@@ -295,6 +305,11 @@ impl Loopback {
 
     /// Wait on a thread of its own for the browser's request and resolve with its full URL.
     /// Any request to another path is answered 404 and ignored.
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to [`AuthError::Timeout`] when no callback arrives within the
+    /// session's limit, and [`AuthError::Platform`] when the listener fails.
     pub fn wait(
         self,
         options: &SessionOptions,
@@ -328,8 +343,7 @@ impl Loopback {
             .redirect_uri
             .splitn(4, '/')
             .nth(3)
-            .map(|p| format!("/{p}"))
-            .unwrap_or_else(|| "/".to_string());
+            .map_or_else(|| "/".to_string(), |p| format!("/{p}"));
         loop {
             match self.listener.accept() {
                 Ok((stream, _)) => {
@@ -356,14 +370,13 @@ impl Loopback {
         let mut chunk = [0u8; 1024];
         loop {
             match stream.read(&mut chunk) {
-                Ok(0) => break,
+                Ok(0) | Err(_) => break,
                 Ok(n) => {
                     buf.extend_from_slice(&chunk[..n]);
                     if buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.len() > 64 * 1024 {
                         break;
                     }
                 }
-                Err(_) => break,
             }
         }
         let head = String::from_utf8_lossy(&buf);
@@ -485,7 +498,7 @@ mod imp {
     pub fn start(url: &str, callback_prefix: &str, options: &SessionOptions, on_done: OnDone) {
         let _ =
             open_session_native_async(url, "", callback_prefix, options.ephemeral, move |answer| {
-                on_done(super::read_answer(answer))
+                on_done(super::read_answer(answer));
             });
     }
 

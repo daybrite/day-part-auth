@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 //! The one daybridge declaration every foreign arm of this crate implements, and the arms
-//! themselves (https://daybrite.dev/contributing/backend-contracts/bridge). day-build generates
+//! themselves (<https://daybrite.dev/contributing/backend-contracts/bridge>). day-build generates
 //! one module per crate from the `bridge!` block, so every platform entry point this crate asks
 //! a foreign language for is declared here once: Swift for AuthenticationServices on iOS and
 //! macOS, Java for Custom Tabs and Credential Manager on Android, JavaScript for the popup and

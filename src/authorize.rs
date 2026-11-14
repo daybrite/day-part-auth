@@ -50,6 +50,11 @@ impl Redirect {
 
 /// An OAuth 2.0 / OpenID Connect client: what never changes between sign-ins.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use]
+#[expect(
+    clippy::struct_field_names,
+    reason = "`client_id` and `client_secret` are the OAuth parameter names"
+)]
 pub struct Client {
     pub(crate) provider: Provider,
     pub(crate) client_id: String,
@@ -131,6 +136,12 @@ impl Client {
     }
 
     /// Draw this request's secrets, resolve the redirect, and build the authorization URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidRequest`] when the client id is empty, an endpoint or the
+    /// redirect is unusable, or an extra parameter repeats a reserved one, and
+    /// [`AuthError::Platform`] when the random source or the loopback listener fails.
     pub fn start(&self) -> Result<Authorization, AuthError> {
         if self.client_id.is_empty() {
             return Err(AuthError::InvalidRequest("the client id is empty".into()));
@@ -262,6 +273,12 @@ impl Authorization {
 
     /// Check the callback URL's `state` and read its `code`, or the error the provider sent
     /// (RFC 6749 §4.1.2.1). The state comparison does not stop at the first difference.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidRequest`] when the callback is for another redirect or carries
+    /// no code, [`AuthError::Provider`] with the provider's error, and
+    /// [`AuthError::StateMismatch`] when the `state` differs.
     pub fn code_from(&self, callback_url: &str) -> Result<String, AuthError> {
         if !crate::urls::callback_matches(&self.redirect_uri, callback_url) {
             return Err(AuthError::InvalidRequest(

@@ -100,6 +100,10 @@ mod demo {
         None
     }
 
+    #[expect(
+        clippy::unused_async,
+        reason = "matches the native module's async signature"
+    )]
     pub async fn silent(_client: Client) -> Result<TokenSet, AuthError> {
         Err(AuthError::Unsupported)
     }
@@ -124,8 +128,7 @@ fn expiry_text(tokens: &TokenSet) -> String {
     res::str::oidc_expires(
         tokens
             .expires_in()
-            .map(|d| d.as_secs().to_string())
-            .unwrap_or_else(|| "?".into()),
+            .map_or_else(|| "?".into(), |d| d.as_secs().to_string()),
     )
     .format()
 }
@@ -306,7 +309,9 @@ fn passkeys_section() -> impl Piece {
     let result = Signal::new(res::str::passkeys_idle().format());
     let available = Signal::new(String::new());
     let support = day_part_auth::passkeys::support();
-    if support != Support::Unsupported {
+    if support == Support::Unsupported {
+        available.set(res::str::passkeys_available_no().format());
+    } else {
         day::task(async move {
             let yes = day_part_auth::passkeys::platform_authenticator_available().await;
             available.set(
@@ -318,8 +323,6 @@ fn passkeys_section() -> impl Piece {
                 .format(),
             );
         });
-    } else {
-        available.set(res::str::passkeys_available_no().format());
     }
     let rp_id = move || {
         let typed = rp.with(|r| r.trim().to_string());

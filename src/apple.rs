@@ -39,6 +39,7 @@ pub enum AppleScope {
 
 /// A Sign in with Apple request.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use]
 pub struct SignInWithApple {
     scopes: Vec<AppleScope>,
     nonce: Option<String>,
@@ -143,6 +144,11 @@ pub fn support() -> Support {
 }
 
 /// Show the Sign in with Apple sheet.
+///
+/// # Errors
+///
+/// The future resolves to [`AuthError::Unsupported`] where the native sheet does not exist,
+/// [`AuthError::Cancelled`] when the person dismisses it, and the platform's error otherwise.
 pub fn sign_in(
     request: SignInWithApple,
 ) -> impl std::future::Future<Output = Result<AppleCredential, AuthError>> + Send {
@@ -210,7 +216,7 @@ fn start(
                 Err(e) => Err(AuthError::Platform(format!("credential JSON: {e}"))),
             },
             Err(e) => Err(AuthError::from(e)),
-        })
+        });
     });
 }
 
@@ -227,6 +233,11 @@ pub enum CredentialState {
 }
 
 /// Ask Apple whether `user` (an [`AppleCredential::user`]) is still authorized.
+///
+/// # Errors
+///
+/// The future resolves to [`AuthError::Unsupported`] where the native sheet does not exist, and
+/// to the platform's error when the lookup fails.
 pub fn credential_state(
     user: &str,
 ) -> impl std::future::Future<Output = Result<CredentialState, AuthError>> + Send {
@@ -240,7 +251,7 @@ pub fn credential_state(
                 Ok(2) => Ok(CredentialState::Revoked),
                 Ok(_) => Ok(CredentialState::NotFound),
                 Err(e) => Err(AuthError::from(e)),
-            })
+            });
         });
     }
     async move { rx.await.unwrap_or(Err(AuthError::Cancelled)) }

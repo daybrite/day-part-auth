@@ -73,7 +73,7 @@ pub fn form_decode(text: &str) -> Vec<(String, String)> {
 
 /// The query of a URL (after `?`, before `#`), decoded.
 pub fn query_of(url: &str) -> Vec<(String, String)> {
-    let after = url.split_once('?').map(|(_, q)| q).unwrap_or("");
+    let after = url.split_once('?').map_or("", |(_, q)| q);
     let query = after.split('#').next().unwrap_or("");
     form_decode(query)
 }
@@ -91,8 +91,7 @@ fn provider_error(status: u16, body: &[u8]) -> AuthError {
         .as_ref()
         .and_then(|v| v.get("error"))
         .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("http_{status}"));
+        .map_or_else(|| format!("http_{status}"), str::to_string);
     let description = parsed
         .as_ref()
         .and_then(|v| v.get("error_description"))
@@ -213,7 +212,10 @@ mod tests {
                 ("state".to_string(), "s".to_string())
             ]
         );
-        assert!(query_of("myapp://cb").is_empty());
+        assert_eq!(
+            query_of("myapp://cb"),
+            [] as [(std::string::String, std::string::String); 0]
+        );
     }
 
     #[test]

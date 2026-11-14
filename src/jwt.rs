@@ -54,6 +54,10 @@ pub struct Jwks {
 
 impl Jwks {
     /// Parse a JWK set document.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidToken`] when `json` is not a JWK set.
     pub fn parse(json: &str) -> Result<Jwks, AuthError> {
         serde_json::from_str(json).map_err(|e| AuthError::InvalidToken(format!("JWK set: {e}")))
     }
@@ -97,6 +101,11 @@ pub struct Jws {
 
 impl Jws {
     /// Split and decode `header.payload.signature`. Nothing is verified yet.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidToken`] when `token` does not have three base64url parts or
+    /// its header or payload is not JSON.
     pub fn decode(token: &str) -> Result<Jws, AuthError> {
         let mut parts = token.split('.');
         let (Some(h), Some(p), Some(s), None) =
@@ -128,6 +137,10 @@ impl Jws {
     }
 
     /// The header's `alg`, when it is one this crate verifies.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidToken`] for any other algorithm, `none` included.
     pub fn algorithm(&self) -> Result<Algorithm, AuthError> {
         let alg = self.header.get("alg").and_then(Value::as_str).unwrap_or("");
         Algorithm::parse(alg)
@@ -141,6 +154,11 @@ impl Jws {
 
     /// Verify the signature against `jwks`. The key is the one whose `kid` matches the
     /// header's; without a `kid`, every key of the algorithm's type is tried.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidToken`] when the algorithm is not supported, no key matches,
+    /// or the signature does not verify.
     pub fn verify(&self, jwks: &Jwks) -> Result<(), AuthError> {
         let alg = self.algorithm()?;
         let kid = self.key_id();
@@ -316,12 +334,15 @@ impl Expected {
 pub fn now_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+        .map_or(0, |d| d.as_secs())
 }
 
 /// OpenID Connect Core §3.1.3.7, the client's part: steps 2 through 11, the ones that do not
 /// depend on the signature already checked by [`Jws::verify`].
+///
+/// # Errors
+///
+/// Returns [`AuthError::InvalidToken`] naming the first claim that fails.
 pub fn validate(claims: &Claims, alg: Algorithm, expected: &Expected) -> Result<(), AuthError> {
     let now = expected.now.unwrap_or_else(now_secs);
     let leeway = expected.leeway_secs;
@@ -401,6 +422,10 @@ pub fn access_token_hash(access_token: &str, _alg: Algorithm) -> String {
 }
 
 /// Build a compact JWS signed with ES256: the demo provider's token mint.
+///
+/// # Errors
+///
+/// Returns [`AuthError::Platform`] when the random source fails or the key cannot sign.
 pub fn sign_es256(
     header: &Value,
     payload: &Value,
@@ -548,7 +573,7 @@ mod tests {
         assert!(validate(&with_hash, Algorithm::Rs256, &expected).is_err());
     }
 
-    /// OpenID Connect Core §3.3.2.11's example: the at_hash of "jHkWEdUXMU1BwAsC4vtUsZwnNvTIxEl0z9K3vx5KF0Y".
+    /// OpenID Connect Core §3.3.2.11's example: the `at_hash` of "jHkWEdUXMU1BwAsC4vtUsZwnNvTIxEl0z9K3vx5KF0Y".
     #[test]
     fn at_hash_matches_the_specification_example() {
         assert_eq!(

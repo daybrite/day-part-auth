@@ -80,6 +80,12 @@ impl Provider {
     /// Fetch `{issuer}/.well-known/openid-configuration` and check that it names `issuer`
     /// (OpenID Connect Discovery §4.3). The issuer must be `https`, or loopback for a local
     /// provider such as the demo one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidRequest`] when `issuer` is not an acceptable URL,
+    /// [`AuthError::Network`] when the document cannot be fetched, and
+    /// [`AuthError::InvalidToken`] when it names another issuer or none.
     pub async fn discover(issuer: &str) -> Result<Provider, AuthError> {
         let parsed = crate::urls::endpoint(issuer)?;
         if parsed.query().is_some() {
@@ -113,6 +119,11 @@ impl Provider {
     }
 
     /// Validate endpoints before opening a browser or sending credentials.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::InvalidRequest`] when an endpoint is not `https` (or loopback), or
+    /// the issuer carries a query.
     pub fn validate(&self) -> Result<(), AuthError> {
         for endpoint in [
             Some(self.authorization_endpoint.as_str()),

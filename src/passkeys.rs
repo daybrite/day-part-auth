@@ -46,6 +46,12 @@ pub fn platform_authenticator_available() -> impl std::future::Future<Output = b
 /// Register a passkey. `options` is a `PublicKeyCredentialCreationOptionsJSON`; the answer is
 /// the registration credential as JSON. Fails with [`AuthError::Cancelled`] when the person
 /// dismisses the dialog.
+///
+/// # Errors
+///
+/// The future resolves to [`AuthError::InvalidRequest`] when `options` is malformed,
+/// [`AuthError::Unsupported`] where no platform authenticator exists, and the platform's
+/// error otherwise.
 pub fn create(
     options: &Value,
 ) -> impl std::future::Future<Output = Result<Value, AuthError>> + Send {
@@ -60,6 +66,13 @@ pub fn create(
 
 /// Sign in with a passkey. `options` is a `PublicKeyCredentialRequestOptionsJSON`; the answer
 /// is the assertion credential as JSON.
+///
+/// # Errors
+///
+/// The future resolves to [`AuthError::InvalidRequest`] when `options` is malformed,
+/// [`AuthError::Cancelled`] when the person dismisses the dialog,
+/// [`AuthError::Unsupported`] where no platform authenticator exists, and the platform's
+/// error otherwise.
 pub fn get(options: &Value) -> impl std::future::Future<Output = Result<Value, AuthError>> + Send {
     let request = check_request_options(options);
     let (tx, rx) = day_async::oneshot();
@@ -103,7 +116,7 @@ fn check_creation_options(options: &Value) -> Result<String, AuthError> {
     if options
         .get("pubKeyCredParams")
         .and_then(Value::as_array)
-        .is_none_or(|p| p.is_empty())
+        .is_none_or(std::vec::Vec::is_empty)
     {
         return Err(AuthError::InvalidRequest(
             "the creation options need pubKeyCredParams".into(),
@@ -189,11 +202,19 @@ mod imp {
         let _ = passkeys_available_native_async(move |answer| on_done(answer == Ok(1)));
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "every platform's `imp` module has this signature"
+    )]
     pub fn create(options_json: String, on_done: OnDone) {
         let _ =
             create_passkey_native_async(&options_json, move |answer| on_done(read_answer(answer)));
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "every platform's `imp` module has this signature"
+    )]
     pub fn get(options_json: String, on_done: OnDone) {
         let _ = get_passkey_native_async(&options_json, move |answer| on_done(read_answer(answer)));
     }

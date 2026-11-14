@@ -113,6 +113,11 @@ async fn key_set(jwks_uri: &str, refresh: bool) -> Result<Jwks, AuthError> {
 
 /// Verify an ID token's signature and claims for `client`, with the `nonce` of the request it
 /// answers and the access token issued beside it.
+///
+/// # Errors
+///
+/// Returns [`AuthError::InvalidToken`] when the token is malformed, its signature does not
+/// verify or a claim fails, and [`AuthError::Network`] when the key set cannot be fetched.
 pub async fn verify_id_token(
     client: &Client,
     raw: &str,
@@ -191,6 +196,12 @@ fn client_auth(client: &Client) -> ClientAuth<'_> {
 
 /// Exchange the callback's code for tokens, verifying the ID token against the request's
 /// nonce. Consumes the request: a code is good once.
+///
+/// # Errors
+///
+/// Returns [`AuthError::StateMismatch`] or [`AuthError::Provider`] from the callback,
+/// [`AuthError::Network`] when the token request fails, and [`AuthError::InvalidToken`]
+/// when the answer or its ID token does not validate.
 pub async fn exchange(
     client: &Client,
     request: Authorization,
@@ -211,6 +222,11 @@ pub async fn exchange(
 
 /// Trade a refresh token for a new set. The new set keeps the old refresh token when the
 /// provider issues no new one; an ID token in the answer is verified without a nonce.
+///
+/// # Errors
+///
+/// Returns [`AuthError::Provider`] with the provider's error, [`AuthError::Network`] when
+/// the request fails, and [`AuthError::InvalidToken`] when the answer does not validate.
 pub async fn refresh(client: &Client, refresh_token: &str) -> Result<TokenSet, AuthError> {
     let (basic, mut fields) = client_auth(client);
     fields.push(("grant_type", "refresh_token"));
@@ -221,6 +237,12 @@ pub async fn refresh(client: &Client, refresh_token: &str) -> Result<TokenSet, A
 
 /// Tell the provider a token is no longer in use (RFC 7009). `hint` is `access_token` or
 /// `refresh_token`. A provider with no revocation endpoint answers `Unsupported`.
+///
+/// # Errors
+///
+/// Returns [`AuthError::Unsupported`] when the provider has no revocation endpoint,
+/// [`AuthError::Provider`] with the provider's error, and [`AuthError::Network`] when the
+/// request fails.
 pub async fn revoke(client: &Client, token: &str, hint: &str) -> Result<(), AuthError> {
     let endpoint = client
         .provider
@@ -235,6 +257,12 @@ pub async fn revoke(client: &Client, token: &str, hint: &str) -> Result<(), Auth
 
 /// The userinfo endpoint's answer for an access token. The `sub` must match the ID token's
 /// when both are at hand (OpenID Connect Core §5.3.2); the caller compares.
+///
+/// # Errors
+///
+/// Returns [`AuthError::Unsupported`] when the provider has no userinfo endpoint,
+/// [`AuthError::Provider`] with the provider's error, and [`AuthError::Network`] when the
+/// request fails.
 pub async fn userinfo(client: &Client, access_token: &str) -> Result<Value, AuthError> {
     let endpoint = client
         .provider

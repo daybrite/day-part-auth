@@ -20,6 +20,7 @@ use crate::{AuthError, Support, crypto};
 
 /// A Google sign-in request.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[must_use]
 pub struct GoogleSignIn {
     server_client_id: String,
     nonce: Option<String>,
@@ -100,6 +101,12 @@ pub fn support() -> Support {
 
 /// Show the Google sign-in sheet. [`AuthError::Provider`] with `no_credential` means no account
 /// matched (with [`GoogleSignIn::filter_by_authorized_accounts`], none had signed in before).
+///
+/// # Errors
+///
+/// The future resolves to [`AuthError::Unsupported`] where the sheet does not exist,
+/// [`AuthError::Cancelled`] when the person dismisses it, and [`AuthError::Provider`] or the
+/// platform's error otherwise.
 pub fn sign_in(
     request: GoogleSignIn,
 ) -> impl std::future::Future<Output = Result<GoogleCredential, AuthError>> + Send {
@@ -162,7 +169,7 @@ fn start(
                     Err(e) => Err(AuthError::Platform(format!("credential JSON: {e}"))),
                 },
                 Err(e) => Err(AuthError::from(e)),
-            })
+            });
         },
     );
 }

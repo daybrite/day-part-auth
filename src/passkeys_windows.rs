@@ -42,8 +42,7 @@ pub fn support() -> Support {
 pub fn available(on_done: Box<dyn FnOnce(bool) + Send>) {
     // SAFETY: no arguments; the DLL answers whether a platform authenticator exists.
     let available = unsafe { WebAuthNIsUserVerifyingPlatformAuthenticatorAvailable() }
-        .map(|b| b.as_bool())
-        .unwrap_or(false);
+        .is_ok_and(windows::core::BOOL::as_bool);
     on_done(available);
 }
 
@@ -64,7 +63,7 @@ fn owner_window() -> Option<Window> {
             return None;
         }
         let mut pid = 0u32;
-        GetWindowThreadProcessId(foreground, Some(&mut pid));
+        GetWindowThreadProcessId(foreground, Some(&raw mut pid));
         (pid == GetCurrentProcessId()).then_some(Window(foreground.0 as isize))
     }
 }
@@ -154,9 +153,8 @@ fn timeout(v: &Value) -> u32 {
 fn client_data(kind: &str, options: &Value, rp_id: &str) -> Result<Vec<u8>, AuthError> {
     let challenge = text(options, &["challenge"])
         .ok_or_else(|| AuthError::InvalidRequest("missing challenge".into()))?;
-    let origin = text(options, &["origin"])
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("https://{rp_id}"));
+    let origin =
+        text(options, &["origin"]).map_or_else(|| format!("https://{rp_id}"), str::to_string);
     let data = json!({
         "type": kind,
         "challenge": challenge,
@@ -192,7 +190,7 @@ fn credential_list(items: Option<&Vec<Value>>) -> (Vec<Vec<u8>>, Vec<WEBAUTHN_CR
     (ids, creds)
 }
 
-fn platform_error(e: windows::core::Error) -> AuthError {
+fn platform_error(e: &windows::core::Error) -> AuthError {
     match e.code().0 {
         HRESULT_CANCELLED => AuthError::Cancelled,
         HRESULT_EXISTS => AuthError::Provider {
@@ -322,14 +320,14 @@ fn make_credential(window: Window, options_json: &str) -> Result<Value, AuthErro
     let attestation = unsafe {
         WebAuthNAuthenticatorMakeCredential(
             HWND(window.0 as *mut core::ffi::c_void),
-            &rp,
-            &user,
-            &cose,
-            &client_data,
-            Some(&make_options),
+            &raw const rp,
+            &raw const user,
+            &raw const cose,
+            &raw const client_data,
+            Some(&raw const make_options),
         )
     }
-    .map_err(platform_error)?;
+    .map_err(|e| platform_error(&e))?;
     let (credential_id, attestation_object) = unsafe {
         let a = &*attestation;
         (
@@ -388,11 +386,11 @@ fn get_assertion(window: Window, options_json: &str) -> Result<Value, AuthError>
         WebAuthNAuthenticatorGetAssertion(
             HWND(window.0 as *mut core::ffi::c_void),
             PCWSTR(rp_id_w.as_ptr()),
-            &client_data,
-            Some(&get_options),
+            &raw const client_data,
+            Some(&raw const get_options),
         )
     }
-    .map_err(platform_error)?;
+    .map_err(|e| platform_error(&e))?;
     let (credential_id, authenticator_data, signature, user_handle) = unsafe {
         let a = &*assertion;
         (

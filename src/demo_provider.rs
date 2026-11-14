@@ -14,6 +14,7 @@
 //! a test) completes a sign-in with an HTTP client standing in for the browser.
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -97,6 +98,10 @@ struct Pending {
 }
 
 /// A code waiting to be exchanged.
+#[expect(
+    clippy::struct_field_names,
+    reason = "`code_challenge` is the PKCE parameter name"
+)]
 struct Code {
     sub: String,
     redirect_uri: String,
@@ -133,6 +138,11 @@ pub struct DemoProvider {
 
 impl DemoProvider {
     /// Bind a free loopback port and start serving.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AuthError::Platform`] when the listener cannot bind or the signing key cannot
+    /// be generated.
     pub fn start(config: DemoConfig) -> Result<DemoProvider, AuthError> {
         let listener =
             TcpListener::bind("127.0.0.1:0").map_err(|e| AuthError::Platform(e.to_string()))?;
@@ -262,7 +272,7 @@ fn read_request(stream: &mut TcpStream) -> Option<Request> {
     let mut chunk = [0u8; 2048];
     let head_end = loop {
         match stream.read(&mut chunk) {
-            Ok(0) => return None,
+            Ok(0) | Err(_) => return None,
             Ok(n) => {
                 buf.extend_from_slice(&chunk[..n]);
                 if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
@@ -272,7 +282,6 @@ fn read_request(stream: &mut TcpStream) -> Option<Request> {
                     return None;
                 }
             }
-            Err(_) => return None,
         }
     };
     let head = String::from_utf8_lossy(&buf[..head_end]).into_owned();
@@ -331,7 +340,7 @@ fn respond(
         body.len()
     );
     for (k, v) in extra {
-        head.push_str(&format!("{k}: {v}\r\n"));
+        let _ = write!(head, "{k}: {v}\r\n");
     }
     head.push_str("\r\n");
     let _ = stream.write_all(head.as_bytes());
@@ -401,7 +410,7 @@ fn serve(mut stream: TcpStream, state: &State) {
             &[],
         ),
         (_, "/token" | "/decision" | "/revoke") => {
-            error(&mut stream, 405, "invalid_request", "POST only")
+            error(&mut stream, 405, "invalid_request", "POST only");
         }
         _ => respond(&mut stream, 404, "text/plain", b"not found", &[]),
     }
@@ -491,7 +500,7 @@ fn authorize(stream: &mut TcpStream, state: &State, query: &[(String, String)]) 
             url_encode(description)
         );
         if let Some(s) = &state_param {
-            location.push_str(&format!("&state={}", url_encode(s)));
+            let _ = write!(location, "&state={}", url_encode(s));
         }
         redirect(stream, &location);
     };
@@ -584,7 +593,7 @@ fn approve(state: &State, pending: Pending, sub: &str) -> String {
         url_encode(&code)
     );
     if let Some(s) = &pending.state {
-        location.push_str(&format!("&state={}", url_encode(s)));
+        let _ = write!(location, "&state={}", url_encode(s));
     }
     lock(&state.codes).retain(|_, c| c.issued.elapsed() < Duration::from_secs(120));
     lock(&state.codes).insert(
@@ -632,7 +641,7 @@ fn decision(stream: &mut TcpStream, state: &State, form: &[(String, String)]) {
             url_encode("the person did not approve the request")
         );
         if let Some(s) = &pending.state {
-            location.push_str(&format!("&state={}", url_encode(s)));
+            let _ = write!(location, "&state={}", url_encode(s));
         }
         redirect(stream, &location);
         return;
@@ -835,13 +844,14 @@ fn page_authorize(state: &State, request_id: &str) -> String {
     let mut buttons = String::new();
     for u in &state.config.users {
         let initial = u.name.chars().next().unwrap_or('?');
-        buttons.push_str(&format!(
+        let _ = write!(
+            buttons,
             "<button type=\"submit\" name=\"user\" value=\"{}\"><span class=\"avatar\">{}</span><span>{}<br><small>{}</small></span></button>",
             escape(&u.sub),
             initial,
             escape(&u.name),
             escape(&u.email)
-        ));
+        );
     }
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Day demo provider</title><style>{STYLE}</style></head><body><main><h1>Sign in to the demo</h1><p>The app asks for <code>{}</code>. Choose an account; nothing here is real.</p><form method=\"post\" action=\"/decision\"><input type=\"hidden\" name=\"request\" value=\"{}\"><input type=\"hidden\" name=\"decision\" value=\"allow\">{buttons}</form><form method=\"post\" action=\"/decision\"><input type=\"hidden\" name=\"request\" value=\"{}\"><input type=\"hidden\" name=\"decision\" value=\"deny\"><button type=\"submit\" class=\"deny\">Cancel</button></form></main></body></html>",
@@ -877,6 +887,11 @@ fn page_home(state: &State) -> String {
 /// the redirect lands on a loopback listener this call binds, and the code is exchanged as
 /// [`Client::sign_in`] would. Nothing opens on screen, which is what a dayscript or a CI leg
 /// needs; the `client`'s redirect is replaced by a loopback one for the call.
+///
+/// # Errors
+///
+/// Fails as [`Client::start`] and the token exchange do, and with [`AuthError::Network`] when
+/// the authorization request does not reach the provider.
 pub async fn sign_in_headless(client: &Client, user: Option<&str>) -> Result<TokenSet, AuthError> {
     let mut client = client.clone().redirect(Redirect::loopback());
     if let Some(user) = user {
@@ -920,7 +935,7 @@ mod tests {
         .expect("write");
         let mut out = Vec::new();
         s.read_to_end(&mut out).expect("read");
-        parse_response(out)
+        parse_response(&out)
     }
 
     fn post(url: &str, body: &str) -> (u16, Vec<(String, String)>, Vec<u8>) {
@@ -932,10 +947,10 @@ mod tests {
         write!(s, "POST /{path} HTTP/1.1\r\nHost: {host}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).expect("write");
         let mut out = Vec::new();
         s.read_to_end(&mut out).expect("read");
-        parse_response(out)
+        parse_response(&out)
     }
 
-    fn parse_response(raw: Vec<u8>) -> (u16, Vec<(String, String)>, Vec<u8>) {
+    fn parse_response(raw: &[u8]) -> (u16, Vec<(String, String)>, Vec<u8>) {
         let split = raw.windows(4).position(|w| w == b"\r\n\r\n").expect("head");
         let head = String::from_utf8_lossy(&raw[..split]).into_owned();
         let mut lines = head.lines();
@@ -1037,7 +1052,7 @@ mod tests {
         write!(s, "GET /userinfo HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {access}\r\nConnection: close\r\n\r\n").expect("write");
         let mut out = Vec::new();
         s.read_to_end(&mut out).expect("read");
-        let (status, _, info) = parse_response(out);
+        let (status, _, info) = parse_response(&out);
         assert_eq!(status, 200);
         let info: Value = serde_json::from_slice(&info).expect("json");
         assert_eq!(info["sub"], Value::String("ada".into()));

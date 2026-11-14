@@ -152,7 +152,7 @@ mod tests {
             AuthError::Network("x".into()),
             AuthError::Platform("x".into()),
         ] {
-            assert!(!e.to_string().is_empty());
+            assert_ne!(e.to_string(), "");
         }
         assert_eq!(
             AuthError::from(day_bridge::Error::Foreign("cancelled".into())),

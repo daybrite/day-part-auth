@@ -15,6 +15,12 @@ impl Client {
     /// tokens. Call it on the UI thread (a button's action) and `.await` it under `day::task`;
     /// the continuation runs on the UI thread again. The person dismissing the browser resolves
     /// with [`AuthError::Cancelled`].
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to the error [`Client::start`], the browser session or
+    /// [`tokens::exchange`] reports; [`AuthError::Cancelled`] when the person dismisses the
+    /// browser.
     pub fn sign_in(&self) -> impl std::future::Future<Output = Result<TokenSet, AuthError>> + Send {
         let client = self.clone();
         let started = self.start();
@@ -37,6 +43,10 @@ impl Client {
 
     /// Finish a sign-in whose browser the app drove itself: `request` from [`Client::start`],
     /// `callback_url` from wherever the app received it.
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to the error [`tokens::exchange`] reports.
     pub fn complete(
         &self,
         request: Authorization,
@@ -48,6 +58,10 @@ impl Client {
     }
 
     /// Trade a refresh token for a new set; see [`tokens::refresh`].
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to the error [`tokens::refresh`] reports.
     pub fn refresh(
         &self,
         refresh_token: &str,
@@ -58,6 +72,10 @@ impl Client {
     }
 
     /// Tell the provider a token is no longer in use; see [`tokens::revoke`].
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to the error [`tokens::revoke`] reports.
     pub fn revoke(
         &self,
         token: &str,
@@ -70,6 +88,10 @@ impl Client {
     }
 
     /// The userinfo endpoint's answer; see [`tokens::userinfo`].
+    ///
+    /// # Errors
+    ///
+    /// The future resolves to the error [`tokens::userinfo`] reports.
     pub fn userinfo(
         &self,
         access_token: &str,
