@@ -88,7 +88,7 @@ struct TokenResponse {
 /// The providers' key sets, kept for an hour; a verification that finds no key for the
 /// token's `kid` fetches again once, which is how a rotated key is picked up.
 static KEY_SETS: Mutex<Option<HashMap<String, (Jwks, SystemTime)>>> = Mutex::new(None);
-const KEY_SET_LIFETIME: Duration = Duration::from_secs(3600);
+const KEY_SET_LIFETIME: Duration = Duration::from_hours(1);
 
 async fn key_set(jwks_uri: &str, refresh: bool) -> Result<Jwks, AuthError> {
     if !refresh {

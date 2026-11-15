@@ -53,10 +53,10 @@ fn exchanging_through_another_provider_is_rejected_before_network_access() {
         Provider::new("https://other.test/auth", "https://other.test/token"),
         "fixture",
     );
-    assert!(matches!(
+    std::assert_matches!(
         block_on(other.complete(request, &callback)),
         Err(AuthError::InvalidRequest(_))
-    ));
+    );
 }
 
 #[test]
@@ -85,10 +85,10 @@ fn token_redirects_do_not_replay_credentials_to_another_endpoint() {
         "fixture",
     )
     .scopes(["profile"]);
-    assert!(matches!(
+    std::assert_matches!(
         block_on(client.refresh("synthetic-refresh-token")),
         Err(AuthError::Network(_))
-    ));
+    );
     server.join().expect("server");
     assert_eq!(
         destination
@@ -110,10 +110,10 @@ fn discovery_matches_the_provider_description() {
     assert_eq!(discovered, demo.provider());
     // Issuer identifiers match exactly; a trailing slash changes the identifier.
     assert!(block_on(Provider::discover(&format!("{}/", demo.issuer()))).is_err());
-    assert!(matches!(
+    std::assert_matches!(
         block_on(Provider::discover("http://example.com")),
         Err(AuthError::InvalidRequest(_))
-    ));
+    );
 }
 
 #[test]
@@ -151,16 +151,15 @@ fn a_headless_sign_in_yields_verified_tokens_and_the_rest_of_the_lifecycle_works
     );
     assert_eq!(refreshed.subject(), Some("grace"));
     // The old refresh token was rotated out.
-    assert!(matches!(
+    std::assert_matches!(
         block_on(client.refresh(&refresh_token)),
-        Err(AuthError::Provider { error, .. }) if error == "invalid_grant"
-    ));
+        Err(AuthError::Provider { error, .. }) if error == "invalid_grant");
 
     block_on(client.revoke(&refreshed.access_token, "access_token")).expect("revoke");
-    assert!(matches!(
+    std::assert_matches!(
         block_on(client.userinfo(&refreshed.access_token)),
         Err(AuthError::Provider { .. })
-    ));
+    );
 
     let logout = client
         .end_session_url(Some(&id.raw), Some("http://127.0.0.1:1/bye"))
@@ -200,17 +199,16 @@ fn the_wrong_client_and_a_tampered_callback_are_refused() {
     .expect("start");
     // An unknown client id: the authorization endpoint refuses before any redirect.
     let wrong = Client::new(demo.provider(), "someone-else");
-    assert!(matches!(
+    std::assert_matches!(
         block_on(sign_in_headless(&wrong, Some("ada"))),
         Err(AuthError::Provider { .. })
-    ));
+    );
     // `prompt=none` for an account the provider does not know: `login_required` comes back
     // through the callback, as the specification says.
     let client = Client::new(demo.provider(), demo.client_id());
-    assert!(matches!(
+    std::assert_matches!(
         block_on(sign_in_headless(&client, Some("nobody"))),
-        Err(AuthError::Provider { error, .. }) if error == "login_required"
-    ));
+        Err(AuthError::Provider { error, .. }) if error == "login_required");
     // A callback whose state is not this request's.
     let client = Client::new(demo.provider(), demo.client_id())
         .redirect(Redirect::Scheme("demo://cb".into()));
@@ -222,8 +220,7 @@ fn the_wrong_client_and_a_tampered_callback_are_refused() {
     // A code the provider never issued.
     let request = client.start().expect("start");
     let callback = format!("demo://cb?code=never-issued&state={}", request.state());
-    assert!(matches!(
+    std::assert_matches!(
         block_on(client.complete(request, &callback)),
-        Err(AuthError::Provider { error, .. }) if error == "invalid_grant"
-    ));
+        Err(AuthError::Provider { error, .. }) if error == "invalid_grant");
 }

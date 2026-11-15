@@ -634,7 +634,7 @@ mod tests {
                 let _ = tx.send(a);
             }),
         );
-        assert!(matches!(rx.recv(), Ok(Err(AuthError::InvalidRequest(_)))));
+        std::assert_matches!(rx.recv(), Ok(Err(AuthError::InvalidRequest(_))));
         let (tx, rx) = std::sync::mpsc::channel();
         start(
             "ftp://x",
@@ -644,6 +644,6 @@ mod tests {
                 let _ = tx.send(a);
             }),
         );
-        assert!(matches!(rx.recv(), Ok(Err(AuthError::InvalidRequest(_)))));
+        std::assert_matches!(rx.recv(), Ok(Err(AuthError::InvalidRequest(_))));
     }
 }

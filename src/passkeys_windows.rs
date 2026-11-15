@@ -167,17 +167,15 @@ fn client_data(kind: &str, options: &Value, rp_id: &str) -> Result<Vec<u8>, Auth
 /// Credential descriptors (`excludeCredentials` / `allowCredentials`) as the API's list. The
 /// id buffers are returned too, so they outlive the structures that point into them.
 fn credential_list(items: Option<&Vec<Value>>) -> (Vec<Vec<u8>>, Vec<WEBAUTHN_CREDENTIAL>) {
-    let mut ids: Vec<Vec<u8>> = items
-        .map(|list| {
-            list.iter()
-                .filter_map(|c| {
-                    c.get("id")
-                        .and_then(Value::as_str)
-                        .and_then(base64url_decode)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut ids: Vec<Vec<u8>> = items.map_or_default(|list| {
+        list.iter()
+            .filter_map(|c| {
+                c.get("id")
+                    .and_then(Value::as_str)
+                    .and_then(base64url_decode)
+            })
+            .collect()
+    });
     let creds = ids
         .iter_mut()
         .map(|id| WEBAUTHN_CREDENTIAL {
@@ -233,7 +231,7 @@ fn make_credential(window: Window, options_json: &str) -> Result<Value, AuthErro
     let mut params: Vec<WEBAUTHN_COSE_CREDENTIAL_PARAMETER> = options
         .get("pubKeyCredParams")
         .and_then(Value::as_array)
-        .map(|list| {
+        .map_or_default(|list| {
             list.iter()
                 .filter(|p| p.get("type").and_then(Value::as_str) == Some("public-key"))
                 .filter_map(|p| p.get("alg").and_then(Value::as_i64))
@@ -244,8 +242,7 @@ fn make_credential(window: Window, options_json: &str) -> Result<Value, AuthErro
                     lAlg: alg,
                 })
                 .collect()
-        })
-        .unwrap_or_default();
+        });
     if params.is_empty() {
         return Err(AuthError::InvalidRequest(
             "no usable pubKeyCredParams".into(),

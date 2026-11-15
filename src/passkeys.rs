@@ -269,29 +269,29 @@ mod tests {
         assert!(check_creation_options(&good).is_ok());
         let mut missing = good.clone();
         missing["user"]["id"] = Value::Null;
-        assert!(matches!(
+        std::assert_matches!(
             check_creation_options(&missing),
             Err(AuthError::InvalidRequest(_))
-        ));
+        );
         let mut no_params = good.clone();
         no_params["pubKeyCredParams"] = json!([]);
-        assert!(matches!(
+        std::assert_matches!(
             check_creation_options(&no_params),
             Err(AuthError::InvalidRequest(_))
-        ));
-        assert!(matches!(
+        );
+        std::assert_matches!(
             check_creation_options(&json!("x")),
             Err(AuthError::InvalidRequest(_))
-        ));
+        );
     }
 
     #[test]
     fn request_options_need_a_challenge() {
         assert!(check_request_options(&json!({"challenge": "abc"})).is_ok());
-        assert!(matches!(
+        std::assert_matches!(
             check_request_options(&json!({"rpId": "x"})),
             Err(AuthError::InvalidRequest(_))
-        ));
+        );
     }
 
     /// The probes answer on every host; a target with no client reports so through both.

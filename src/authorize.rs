@@ -397,6 +397,7 @@ pub fn app_scheme() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::assert_matches;
 
     #[test]
     fn callback_spoofing_and_ambiguous_parameters_are_rejected() {
@@ -512,10 +513,7 @@ mod tests {
             })
         );
         let empty = format!("myapp://auth/callback?state={}", a.state());
-        assert!(matches!(
-            a.code_from(&empty),
-            Err(AuthError::InvalidRequest(_))
-        ));
+        assert_matches!(a.code_from(&empty), Err(AuthError::InvalidRequest(_)));
     }
 
     #[test]

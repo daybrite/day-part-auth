@@ -82,7 +82,7 @@ impl Default for DemoConfig {
             ],
             auto_approve: None,
             allow_prompt_none: true,
-            access_token_lifetime: Duration::from_secs(3600),
+            access_token_lifetime: Duration::from_hours(1),
         }
     }
 }
@@ -839,8 +839,7 @@ fn escape(text: &str) -> String {
 fn page_authorize(state: &State, request_id: &str) -> String {
     let scope = lock(&state.pending)
         .get(request_id)
-        .map(|p| p.scope.clone())
-        .unwrap_or_default();
+        .map_or_default(|p| p.scope.clone());
     let mut buttons = String::new();
     for u in &state.config.users {
         let initial = u.name.chars().next().unwrap_or('?');
